@@ -130,6 +130,7 @@ function displayWeather(data) {
     const windKmh = Math.round(data.wind.speed * 3.6);
     const feels = Math.round(temp + getFeelsLikeAdjustment(data.humidity, windKmh));
 
+    setWeatherScene(data.weather, data.timezone);
     cityName.textContent = data.location.name;
     forecastCity.textContent = data.location.country || 'Gujarat';
     currentDate.textContent = new Date().toLocaleDateString('en-IN', {
@@ -150,6 +151,34 @@ function displayWeather(data) {
 
     hideLoading();
     showWeather();
+}
+
+function setWeatherScene(weather, timezone) {
+    const weatherMain = (weather.main || weather.description || '').toLowerCase();
+    const isNight = weather.icon?.endsWith('n') || isNightInTimezone(timezone);
+    let scene = isNight ? 'night' : 'clear';
+
+    if (weatherMain.includes('thunder')) scene = 'thunderstorm';
+    else if (weatherMain.includes('snow')) scene = 'snow';
+    else if (weatherMain.includes('rain') || weatherMain.includes('drizzle')) scene = 'rain';
+    else if (weatherMain.includes('mist') || weatherMain.includes('fog') || weatherMain.includes('haze')) scene = 'mist';
+    else if (weatherMain.includes('cloud')) scene = isNight ? 'night-cloudy' : 'cloudy';
+
+    document.body.dataset.weather = scene;
+}
+
+function isNightInTimezone(timezone) {
+    if (!timezone) return false;
+    try {
+        const hour = Number(new Intl.DateTimeFormat('en-US', {
+            hour: 'numeric',
+            hour12: false,
+            timeZone: timezone
+        }).format(new Date()));
+        return hour < 6 || hour >= 18;
+    } catch (error) {
+        return false;
+    }
 }
 
 function displayForecast(data) {

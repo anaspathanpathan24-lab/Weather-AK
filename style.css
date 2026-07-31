@@ -36,6 +36,7 @@
 
 body {
     min-height: 100vh;
+    position: relative;
     background:
         radial-gradient(circle at 85% 8%, rgba(242, 184, 75, 0.18), transparent 28rem),
         linear-gradient(135deg, var(--page-bg), var(--surface-strong));
@@ -43,6 +44,163 @@ body {
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
     overflow-x: hidden;
 }
+
+.weather-scene {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    background: linear-gradient(135deg, #79c9f2, #d9f3ff 55%, #f8d993);
+    transition: background 1.2s ease, filter 1.2s ease;
+}
+
+.weather-scene::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(12, 35, 56, 0.08);
+    transition: background 1.2s ease;
+}
+
+.app-shell {
+    position: relative;
+    z-index: 1;
+}
+
+.weather-scene > div {
+    position: absolute;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+}
+
+.scene-sun {
+    width: clamp(110px, 16vw, 230px);
+    aspect-ratio: 1;
+    top: 9%;
+    right: 12%;
+    border-radius: 50%;
+    background: #ffe58b;
+    box-shadow: 0 0 90px 28px rgba(255, 220, 116, 0.5);
+    opacity: 1;
+}
+
+.scene-rays {
+    inset: -35%;
+    background: repeating-conic-gradient(from 0deg, rgba(255, 238, 166, 0.22) 0 2deg, transparent 2deg 22deg);
+    animation: rotate-rays 26s linear infinite;
+    opacity: 1 !important;
+}
+
+.scene-cloud {
+    width: 270px;
+    height: 74px;
+    border-radius: 999px;
+    background: rgba(224, 239, 249, 0.72);
+    box-shadow: 52px -30px 0 8px rgba(224, 239, 249, 0.72), 122px -8px 0 -2px rgba(224, 239, 249, 0.72);
+}
+
+.scene-cloud-one {
+    top: 18%;
+    left: -300px;
+    animation: drift-cloud 42s linear infinite;
+}
+
+.scene-cloud-two {
+    top: 42%;
+    left: -220px;
+    transform: scale(0.72);
+    animation: drift-cloud 58s linear 8s infinite;
+}
+
+.scene-rain {
+    inset: -20% 0;
+    background: repeating-linear-gradient(105deg, transparent 0 19px, rgba(185, 223, 243, 0.36) 20px 22px, transparent 23px 38px);
+    animation: rain-fall 850ms linear infinite;
+}
+
+.scene-snow {
+    inset: -10% 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 3px, transparent 4px), radial-gradient(circle, rgba(255, 255, 255, 0.75) 0 2px, transparent 3px);
+    background-size: 54px 54px, 83px 83px;
+    animation: snow-fall 8s linear infinite;
+}
+
+.scene-fog {
+    inset: 0;
+    background: repeating-linear-gradient(170deg, transparent 0 80px, rgba(255, 255, 255, 0.25) 110px 180px, transparent 210px 280px);
+    filter: blur(18px);
+    animation: fog-drift 18s ease-in-out infinite alternate;
+}
+
+.scene-stars {
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.9) 0 1px, transparent 2px), radial-gradient(circle, rgba(255, 255, 255, 0.72) 0 1px, transparent 2px);
+    background-size: 97px 83px, 151px 127px;
+    animation: twinkle 2.8s ease-in-out infinite alternate;
+}
+
+.scene-moon {
+    width: 100px;
+    aspect-ratio: 1;
+    top: 11%;
+    right: 14%;
+    border-radius: 50%;
+    background: #f4f0c7;
+    box-shadow: 0 0 42px rgba(244, 240, 199, 0.45);
+}
+
+.scene-lightning {
+    inset: 0;
+    background: rgba(230, 245, 255, 0.8);
+    animation: lightning-flash 5s infinite;
+}
+
+body[data-weather="cloudy"] .weather-scene,
+body[data-weather="night-cloudy"] .weather-scene {
+    background: linear-gradient(135deg, #607b91, #b8cbd5 56%, #788b9b);
+}
+
+body[data-weather="cloudy"] .scene-cloud,
+body[data-weather="night-cloudy"] .scene-cloud,
+body[data-weather="rain"] .scene-cloud,
+body[data-weather="thunderstorm"] .scene-cloud { opacity: 1; }
+
+body[data-weather="rain"] .weather-scene {
+    background: linear-gradient(145deg, #263d50, #526b7b 52%, #172937);
+    filter: saturate(0.78);
+}
+
+body[data-weather="rain"] .scene-rain,
+body[data-weather="thunderstorm"] .scene-rain { opacity: 1; }
+
+body[data-weather="rain"] .weather-scene::after,
+body[data-weather="thunderstorm"] .weather-scene::after { background: rgba(8, 24, 38, 0.28); backdrop-filter: blur(2px); }
+
+body[data-weather="thunderstorm"] .weather-scene { background: linear-gradient(145deg, #101a2a, #31475b 52%, #0b1421); }
+body[data-weather="thunderstorm"] .scene-lightning { opacity: 0; }
+body[data-weather="snow"] .weather-scene { background: linear-gradient(145deg, #d9edf4, #ffffff 52%, #c7dde9); }
+body[data-weather="snow"] .scene-snow { opacity: 1; }
+body[data-weather="mist"] .weather-scene { background: linear-gradient(145deg, #9aaeb7, #d8e1e1 55%, #899da8); }
+body[data-weather="mist"] .scene-fog { opacity: 1; }
+body[data-weather="night"] .weather-scene,
+body[data-weather="night-cloudy"] .weather-scene { background: linear-gradient(145deg, #071326, #142d4a 55%, #0a172c); }
+body[data-weather="night"] .scene-moon,
+body[data-weather="night"] .scene-stars,
+body[data-weather="night-cloudy"] .scene-moon,
+body[data-weather="night-cloudy"] .scene-stars { opacity: 1; }
+body[data-weather="night"] .scene-sun,
+body[data-weather="night"] .scene-rays { opacity: 0; }
+body[data-weather="night"] .weather-scene::after,
+body[data-weather="night-cloudy"] .weather-scene::after { background: rgba(3, 12, 28, 0.2); }
+
+@keyframes rotate-rays { to { transform: rotate(360deg); } }
+@keyframes drift-cloud { to { transform: translateX(calc(100vw + 540px)); } }
+@keyframes rain-fall { to { transform: translateY(18%); } }
+@keyframes snow-fall { to { transform: translate3d(35px, 18%, 0); } }
+@keyframes fog-drift { to { transform: translateX(8%) scale(1.08); } }
+@keyframes twinkle { to { opacity: 0.4; } }
+@keyframes lightning-flash { 0%, 91%, 95%, 100% { opacity: 0; } 92%, 94% { opacity: 0.22; } 93% { opacity: 0.8; } }
 
 button,
 input {
