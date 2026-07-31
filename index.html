@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gujarat Weather Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+
+<body>
+    <aside class="sidebar" aria-label="Dashboard navigation">
+        <div class="brand">
+            <div class="brand-mark"><i class="fas fa-cloud-sun"></i></div>
+            <span>Weather</span>
+        </div>
+        <nav class="side-nav">
+            <button class="active" title="Dashboard"><i class="fas fa-table-columns"></i></button>
+            <button title="Map"><i class="fas fa-map-location-dot"></i></button>
+            <button title="Alerts"><i class="fas fa-bell"></i></button>
+            <button title="Settings"><i class="fas fa-gear"></i></button>
+        </nav>
+    </aside>
+
+    <main class="app-shell">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow">Gujarat Weather</p>
+                <h1>Forecast Dashboard</h1>
+            </div>
+            <div class="topbar-actions">
+                <div class="search-container">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="city-search" placeholder="Search city" list="gujarat-cities">
+                    <datalist id="gujarat-cities">
+                        <option value="Ahmedabad">
+                        <option value="Surat">
+                        <option value="Vadodara">
+                        <option value="Rajkot">
+                        <option value="Bhavnagar">
+                        <option value="Jamnagar">
+                        <option value="Gandhinagar">
+                    </datalist>
+                    <button id="search-btn" title="Search"><i class="fas fa-arrow-right"></i></button>
+                </div>
+                <button id="theme-toggle" class="icon-btn" title="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+        </header>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading weather data...</p>
+        </div>
+
+        <section id="weather-container" class="dashboard hidden">
+            <section class="hero-panel">
+                <div class="hero-copy">
+                    <p id="current-date">Date</p>
+                    <h2 id="city-name">City Name</h2>
+                    <div class="temperature-row">
+                        <img id="weather-icon" src="" alt="Weather icon">
+                        <span id="temperature">--&deg;C</span>
+                    </div>
+                    <p id="condition">Condition</p>
+                </div>
+                <div class="hero-visual" aria-hidden="true">
+                    <div class="sun-disc"></div>
+                    <div class="cloud cloud-one"></div>
+                    <div class="cloud cloud-two"></div>
+                    <div class="rain-lines"></div>
+                </div>
+            </section>
+
+            <section class="metric-grid" aria-label="Weather details">
+                <article class="metric-card">
+                    <i class="fas fa-tint"></i>
+                    <div>
+                        <span>Humidity</span>
+                        <strong id="humidity">--%</strong>
+                    </div>
+                </article>
+                <article class="metric-card">
+                    <i class="fas fa-wind"></i>
+                    <div>
+                        <span>Wind</span>
+                        <strong id="wind-speed">-- km/h</strong>
+                    </div>
+                </article>
+                <article class="metric-card">
+                    <i class="fas fa-temperature-half"></i>
+                    <div>
+                        <span>Feels Like</span>
+                        <strong id="feels-like">--&deg;C</strong>
+                    </div>
+                </article>
+                <article class="metric-card">
+                    <i class="fas fa-leaf"></i>
+                    <div>
+                        <span>Air Quality</span>
+                        <strong id="air-quality">Good</strong>
+                    </div>
+                </article>
+            </section>
+
+            <section class="content-grid">
+                <div class="main-stack">
+                    <section class="panel">
+                        <div class="panel-header">
+                            <h3>5-Day Forecast</h3>
+                            <span id="forecast-city">Gujarat</span>
+                        </div>
+                        <div id="forecast-grid" class="forecast-grid"></div>
+                    </section>
+
+                    <section class="panel map-panel">
+                        <div class="panel-header">
+                            <h3>Weather Map</h3>
+                            <span>Live region view</span>
+                        </div>
+                        <div class="map-canvas">
+                            <div class="map-pin pin-one"></div>
+                            <div class="map-pin pin-two"></div>
+                            <div class="map-pin pin-three"></div>
+                            <span>Gujarat</span>
+                        </div>
+                    </section>
+                </div>
+
+                <aside class="right-stack">
+                    <section class="panel photo-panel">
+                        <div class="photo-frame">
+                            <div class="weather-app-shot">
+                                <div class="shot-sidebar"></div>
+                                <div class="shot-main">
+                                    <span></span>
+                                    <strong>Ads in the new weather app?</strong>
+                                    <div class="shot-temp">72&deg;</div>
+                                    <div class="shot-strip"></div>
+                                    <div class="shot-ad">Sponsored</div>
+                                </div>
+                            </div>
+                        </div>
+                        <a class="source-link" href="https://www.reddit.com/r/Windows11/comments/1321tpx/ads_in_the_new_weather_app/" target="_blank" rel="noreferrer">
+                            Reddit photo reference
+                        </a>
+                    </section>
+
+                    <section class="panel alert-panel">
+                        <div class="panel-header">
+                            <h3>Today</h3>
+                            <span>Summary</span>
+                        </div>
+                        <p id="daily-summary">Weather details will appear here after loading.</p>
+                    </section>
+                </aside>
+            </section>
+        </section>
+
+        <div id="error-message" class="error-message hidden">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p id="error-text">Error message</p>
+            <button id="retry-btn">Retry</button>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
