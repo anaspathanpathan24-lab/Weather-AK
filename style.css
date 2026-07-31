@@ -1,5 +1,5 @@
 :root {
-    --page-bg: #eef3f8;
+    --page-bg: #123456;
     --surface: #ffffff;
     --surface-soft: #f7fafc;
     --surface-strong: #e6eef6;
@@ -51,7 +51,7 @@ body {
     z-index: 0;
     overflow: hidden;
     pointer-events: none;
-    background: linear-gradient(135deg, #79c9f2, #d9f3ff 55%, #f8d993);
+    background: #123456;
     transition: background 1.2s ease, filter 1.2s ease;
 }
 
