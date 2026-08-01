@@ -12,6 +12,8 @@ const currentDate = document.getElementById('current-date');
 const currentTime = document.getElementById('current-time');
 const cityList = document.getElementById('gujarat-cities');
 const weatherIcon = document.getElementById('weather-icon');
+const weatherIllustration = document.querySelector('.weather-illustration');
+const sceneLayer = document.getElementById('scene-layer');
 const temperature = document.getElementById('temperature');
 const condition = document.getElementById('condition');
 const humidity = document.getElementById('humidity');
@@ -258,6 +260,7 @@ function displayWeather(data) {
     rainChance.textContent = `${rain}%`;
     heroRain.textContent = `${rain}%`;
 
+    applyWeatherAnimation(data.weather.description, data.weather.icon);
     renderHourly(temp, rain, data.weather.icon);
     renderChart(makeChartTemps(temp));
     hideLoading();
@@ -330,6 +333,101 @@ function renderChart(temps) {
         const label = index === 5 ? `<text x="${x - 20}" y="${y - 16}" fill="#ffffff" font-size="12" font-weight="700">${temps[index]}&deg;C</text>` : '';
         return `${label}<circle cx="${x}" cy="${y}" r="5"></circle>`;
     }).join('');
+}
+
+function applyWeatherAnimation(description, icon) {
+    if (!weatherIllustration || !sceneLayer) return;
+
+    const mode = getWeatherAnimationMode(description, icon);
+    weatherIllustration.classList.remove('weather-mode-clear', 'weather-mode-cloudy', 'weather-mode-rain', 'weather-mode-thunderstorm', 'weather-mode-snow', 'weather-mode-mist', 'weather-mode-night');
+    weatherIllustration.classList.add(`weather-mode-${mode}`);
+    sceneLayer.innerHTML = createSceneMarkup(mode);
+}
+
+function getWeatherAnimationMode(description, icon) {
+    const text = (description || '').toLowerCase();
+    const isNight = String(icon || '').endsWith('n');
+
+    if (text.includes('thunder') || text.includes('lightning')) return 'thunderstorm';
+    if (text.includes('snow')) return 'snow';
+    if (text.includes('rain') || text.includes('drizzle')) return 'rain';
+    if (text.includes('mist') || text.includes('fog') || text.includes('haze') || text.includes('smoke')) return 'mist';
+    if (text.includes('cloud') || text.includes('overcast')) return isNight ? 'night' : 'cloudy';
+    if (isNight) return 'night';
+    return 'clear';
+}
+
+function createSceneMarkup(mode) {
+    switch (mode) {
+        case 'clear':
+            return `
+                <div class="scene-glow"></div>
+                ${Array.from({ length: 8 }, (_, index) => `
+                    <span class="scene-particle" style="--x:${8 + index * 10}%; --y:${14 + (index % 4) * 12}%; --delay:${index * 0.6}s; --duration:${8 + index % 3}s; --size:${5 + (index % 3) * 2}px"></span>
+                `).join('')}
+            `;
+        case 'cloudy':
+            return `
+                <div class="scene-cloud-group">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            `;
+        case 'rain':
+            return `
+                <div class="scene-cloud-group">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                ${Array.from({ length: 24 }, (_, index) => `
+                    <span class="scene-drop" style="--left:${6 + (index % 16) * 5}%; --delay:${index * 0.04}s; --duration:${0.8 + (index % 4) * 0.1}s; --size:${2 + (index % 3)}px"></span>
+                `).join('')}
+                <span class="scene-splash"></span>
+            `;
+        case 'thunderstorm':
+            return `
+                <div class="scene-cloud-group">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                ${Array.from({ length: 24 }, (_, index) => `
+                    <span class="scene-drop" style="--left:${6 + (index % 16) * 5}%; --delay:${index * 0.04}s; --duration:${0.78 + (index % 4) * 0.1}s; --size:${2 + (index % 3)}px"></span>
+                `).join('')}
+                <span class="scene-splash"></span>
+                <span class="scene-lightning"></span>
+                <span class="scene-flare"></span>
+            `;
+        case 'snow':
+            return `
+                <div class="scene-cloud-group">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                ${Array.from({ length: 18 }, (_, index) => `
+                    <span class="scene-flake" style="--left:${4 + (index % 18) * 5}%; --delay:${index * 0.14}s; --duration:${5 + (index % 4) * 1.2}s; --size:${3 + (index % 3) * 2}px"></span>
+                `).join('')}
+            `;
+        case 'mist':
+            return `
+                <div class="scene-fog"></div>
+                <div class="scene-fog" style="height: 42px; opacity: 0.55; animation-duration: 14s; inset: auto 0 38px;"></div>
+            `;
+        case 'night':
+            return `
+                <div class="scene-stars">
+                    ${Array.from({ length: 12 }, (_, index) => `
+                        <span style="left:${10 + index * 7}%; top:${14 + (index % 4) * 12}%; --duration:${1.5 + (index % 4) * 0.8}s; --delay:${index * 0.2}s; --size:${2 + (index % 2)}px"></span>
+                    `).join('')}
+                </div>
+                <span class="scene-shooting-star"></span>
+            `;
+        default:
+            return '';
+    }
 }
 
 function makeChartTemps(temp) {
