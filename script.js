@@ -1,6 +1,7 @@
 const citySearch = document.getElementById('city-search');
 const searchBtn = document.getElementById('search-btn');
 const themeToggle = document.getElementById('theme-toggle');
+const locationBtn = document.getElementById('location-btn');
 const loading = document.getElementById('loading');
 const weatherContainer = document.getElementById('weather-container');
 const errorMessage = document.getElementById('error-message');
@@ -68,6 +69,7 @@ window.addEventListener('load', () => {
 });
 
 searchBtn.addEventListener('click', runSearch);
+locationBtn.addEventListener('click', requestUserLocation);
 citySearch.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
         runSearch();

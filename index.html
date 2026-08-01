@@ -37,14 +37,17 @@
 
     <main class="app-shell">
         <header class="topbar">
-            <div>
-                <p class="eyebrow">Gujarat Weather</p>
-                <h1>Forecast Dashboard</h1>
+            <div class="brand-lockup">
+                <div class="brand-mark mobile-brand-mark"><i class="fas fa-cloud-sun"></i></div>
+                <div>
+                    <p class="eyebrow">Gujarat Weather</p>
+                    <h1>Forecast Dashboard</h1>
+                </div>
             </div>
             <div class="topbar-actions">
                 <div class="search-container">
                     <i class="fas fa-search"></i>
-                    <input type="text" id="city-search" placeholder="Search city" list="gujarat-cities">
+                    <input type="text" id="city-search" placeholder="Search Gujarat city..." list="gujarat-cities">
                     <datalist id="gujarat-cities">
                         <option value="Ahmedabad">
                         <option value="Surat">
@@ -59,6 +62,12 @@
                 <button id="theme-toggle" class="icon-btn" title="Toggle theme">
                     <i class="fas fa-moon"></i>
                 </button>
+                <button id="location-btn" class="icon-btn" title="Use my location" aria-label="Use my location">
+                    <i class="fas fa-location-crosshairs"></i>
+                </button>
+                <button class="profile-btn" title="Profile" aria-label="Profile">
+                    <i class="fas fa-user"></i>
+                </button>
             </div>
         </header>
 
@@ -70,6 +79,7 @@
         <section id="weather-container" class="dashboard hidden">
             <section class="hero-panel">
                 <div class="hero-copy">
+                    <div class="live-label"><span></span> Live conditions</div>
                     <p id="current-date">Date</p>
                     <h2 id="city-name">City Name</h2>
                     <div class="temperature-row">
@@ -77,6 +87,7 @@
                         <span id="temperature">--&deg;C</span>
                     </div>
                     <p id="condition">Condition</p>
+                    <div class="hero-footnote"><i class="fas fa-location-dot"></i> Gujarat, India <span></span> Updated just now</div>
                 </div>
                 <div class="hero-visual" aria-hidden="true">
                     <div class="sun-disc"></div>
