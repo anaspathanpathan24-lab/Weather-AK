@@ -4,189 +4,232 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gujarat Weather Dashboard</title>
+    <title>Gujarat Weather</title>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 </head>
 
 <body>
-    <div class="weather-scene" aria-hidden="true">
-        <div class="scene-moon"></div>
-        <div class="scene-stars"></div>
-        <div class="scene-cloud scene-cloud-one"></div>
-        <div class="scene-cloud scene-cloud-two"></div>
-        <div class="scene-sun"></div>
-        <div class="scene-rays"></div>
-        <div class="scene-rain"></div>
-        <div class="scene-snow"></div>
-        <div class="scene-fog"></div>
-        <div class="scene-lightning"></div>
-    </div>
-    <aside class="sidebar" aria-label="Dashboard navigation">
-        <div class="brand">
-            <div class="brand-mark"><i class="fas fa-cloud-sun"></i></div>
-            <span>Weather</span>
-        </div>
-        <nav class="side-nav">
-            <button class="active" title="Dashboard"><i class="fas fa-table-columns"></i></button>
-            <button title="Map"><i class="fas fa-map-location-dot"></i></button>
-            <button title="Alerts"><i class="fas fa-bell"></i></button>
-            <button title="Settings"><i class="fas fa-gear"></i></button>
-        </nav>
-    </aside>
+    <main class="weather-app">
+        <aside class="sidebar" aria-label="Weather navigation">
+            <a class="brand" href="#" aria-label="Gujarat Weather home">
+                <span class="brand-icon"><i class="fa-solid fa-cloud-sun"></i></span>
+                <span>Gujarat Weather</span>
+            </a>
 
-    <main class="app-shell">
-        <header class="topbar">
-            <div class="brand-lockup">
-                <div class="brand-mark mobile-brand-mark"><i class="fas fa-cloud-sun"></i></div>
-                <div>
-                    <p class="eyebrow">Gujarat Weather</p>
-                    <h1>Forecast Dashboard</h1>
-                </div>
-            </div>
-            <div class="topbar-actions">
-                <div class="search-container">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="city-search" placeholder="Search Gujarat city..." list="gujarat-cities">
-                    <datalist id="gujarat-cities">
-                        <option value="Ahmedabad">
-                        <option value="Surat">
-                        <option value="Vadodara">
-                        <option value="Rajkot">
-                        <option value="Bhavnagar">
-                        <option value="Jamnagar">
-                        <option value="Gandhinagar">
-                    </datalist>
-                    <button id="search-btn" title="Search"><i class="fas fa-arrow-right"></i></button>
-                </div>
-                <button id="theme-toggle" class="icon-btn" title="Toggle theme">
-                    <i class="fas fa-moon"></i>
-                </button>
-                <button id="location-btn" class="icon-btn" title="Use my location" aria-label="Use my location">
-                    <i class="fas fa-location-crosshairs"></i>
-                </button>
-                <button class="profile-btn" title="Profile" aria-label="Profile">
-                    <i class="fas fa-user"></i>
-                </button>
-            </div>
-        </header>
+            <nav class="nav-list">
+                <button class="active" type="button"><i class="fa-solid fa-table-cells-large"></i><span>Dashboard</span></button>
+                <button type="button"><i class="fa-solid fa-map-location-dot"></i><span>Map</span></button>
+                <button type="button"><i class="fa-solid fa-cloud-sun-rain"></i><span>Forecast</span></button>
+                <button type="button"><i class="fa-solid fa-bell"></i><span>Alerts</span></button>
+                <button type="button"><i class="fa-regular fa-heart"></i><span>Saved Places</span></button>
+                <button type="button"><i class="fa-solid fa-leaf"></i><span>Air Quality</span></button>
+                <button type="button"><i class="fa-solid fa-gear"></i><span>Settings</span></button>
+            </nav>
 
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p>Loading weather data...</p>
-        </div>
-
-        <section id="weather-container" class="dashboard hidden">
-            <section class="hero-panel">
-                <div class="hero-copy">
-                    <div class="live-label"><span></span> Live conditions</div>
-                    <p id="current-date">Date</p>
-                    <h2 id="city-name">City Name</h2>
-                    <div class="temperature-row">
-                        <img id="weather-icon" src="" alt="Weather icon">
-                        <span id="temperature">--&deg;C</span>
-                    </div>
-                    <p id="condition">Condition</p>
-                    <div class="hero-footnote"><i class="fas fa-location-dot"></i> Gujarat, India <span></span> Updated just now</div>
-                </div>
-                <div class="hero-visual" aria-hidden="true">
-                    <div class="sun-disc"></div>
-                    <div class="cloud cloud-one"></div>
-                    <div class="cloud cloud-two"></div>
-                    <div class="rain-lines"></div>
-                </div>
+            <section class="premium-card" aria-label="Premium offer">
+                <i class="fa-solid fa-crown"></i>
+                <strong>Get Premium</strong>
+                <p>Unlock premium features and ad-free experience.</p>
+                <button type="button">Upgrade Now</button>
             </section>
+        </aside>
 
-            <section class="metric-grid" aria-label="Weather details">
-                <article class="metric-card">
-                    <i class="fas fa-tint"></i>
-                    <div>
+        <section class="workspace">
+            <header class="topbar">
+                <div class="mobile-brand">
+                    <span class="brand-icon"><i class="fa-solid fa-cloud-sun"></i></span>
+                    <span>Gujarat Weather</span>
+                </div>
+
+                <label class="search-box" for="city-search">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input id="city-search" type="text" placeholder="Search Gujarat city..." list="gujarat-cities">
+                    <datalist id="gujarat-cities"></datalist>
+                    <button id="search-btn" type="button" title="Search" aria-label="Search">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </button>
+                </label>
+
+                <button id="location-btn" class="location-btn" type="button">
+                    <i class="fa-solid fa-location-dot"></i>
+                    <span>Use My Location</span>
+                </button>
+
+                <div class="top-actions">
+                    <button id="theme-toggle" class="icon-btn" type="button" title="Toggle theme" aria-label="Toggle theme">
+                        <i class="fa-regular fa-moon"></i>
+                    </button>
+                    <button class="avatar-btn" type="button" aria-label="Profile">
+                        <span></span>
+                    </button>
+                </div>
+            </header>
+
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Loading weather data...</p>
+            </div>
+
+            <div id="error-message" class="error-message hidden">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <p id="error-text">Weather data could not load.</p>
+                <button id="retry-btn" type="button">Retry</button>
+            </div>
+
+            <section id="weather-container" class="dashboard hidden">
+                <section class="current-panel glass-panel">
+                    <div class="current-header">
+                        <h1><i class="fa-solid fa-location-dot"></i><span id="city-name">Ahmedabad, Gujarat</span></h1>
+                        <span><i class="fa-solid fa-rotate"></i> Updated <b id="updated-time">2 min ago</b></span>
+                    </div>
+
+                    <div class="current-content">
+                        <div class="current-copy">
+                            <p id="current-date">Friday, 31 July 2026</p>
+                            <p id="current-time">08:35 PM</p>
+                            <div id="temperature" class="temperature">29&deg;C</div>
+                            <h2 id="condition">Partly Cloudy</h2>
+                            <p>Feels like <span id="feels-like-inline">31&deg;C</span></p>
+                        </div>
+
+                        <div class="weather-illustration" aria-hidden="true">
+                            <div class="halo"></div>
+                            <div class="sun"></div>
+                            <div class="cloud cloud-a"></div>
+                            <div class="cloud cloud-b"></div>
+                            <img id="weather-icon" src="" alt="">
+                        </div>
+                    </div>
+
+                    <div class="mini-stats">
+                        <article><i class="fa-regular fa-sun"></i><span>Sunrise</span><strong>5:58 AM</strong></article>
+                        <article><i class="fa-solid fa-cloud-sun"></i><span>Sunset</span><strong>7:18 PM</strong></article>
+                        <article><i class="fa-solid fa-cloud-rain"></i><span>Rain Chance</span><strong id="hero-rain">28%</strong></article>
+                        <article><i class="fa-regular fa-sun"></i><span>UV Index</span><strong id="hero-uv">7 High</strong></article>
+                    </div>
+                </section>
+
+                <section class="metric-grid" aria-label="Current weather details">
+                    <article class="metric-card glass-panel cyan">
+                        <i class="fa-solid fa-droplet"></i>
                         <span>Humidity</span>
-                        <strong id="humidity">--%</strong>
-                    </div>
-                </article>
-                <article class="metric-card">
-                    <i class="fas fa-wind"></i>
-                    <div>
+                        <strong id="humidity">89%</strong>
+                        <div class="meter"><span id="humidity-meter"></span></div>
+                    </article>
+                    <article class="metric-card glass-panel blue">
+                        <i class="fa-solid fa-wind"></i>
                         <span>Wind</span>
-                        <strong id="wind-speed">-- km/h</strong>
-                    </div>
-                </article>
-                <article class="metric-card">
-                    <i class="fas fa-temperature-half"></i>
-                    <div>
-                        <span>Feels Like</span>
-                        <strong id="feels-like">--&deg;C</strong>
-                    </div>
-                </article>
-                <article class="metric-card">
-                    <i class="fas fa-leaf"></i>
-                    <div>
+                        <strong id="wind-speed">9 km/h</strong>
+                        <small id="wind-direction">NW</small>
+                        <div class="meter"><span id="wind-meter"></span></div>
+                    </article>
+                    <article class="metric-card glass-panel green">
+                        <i class="fa-solid fa-leaf"></i>
                         <span>Air Quality</span>
                         <strong id="air-quality">Good</strong>
+                        <small>AQI <span id="aqi-value">42</span></small>
+                        <div class="meter"><span id="aqi-meter"></span></div>
+                    </article>
+                    <article class="metric-card glass-panel yellow">
+                        <i class="fa-regular fa-sun"></i>
+                        <span>UV Index</span>
+                        <strong id="uv-index">7</strong>
+                        <small>High</small>
+                        <div class="meter"><span id="uv-meter"></span></div>
+                    </article>
+                    <article class="metric-card glass-panel blue">
+                        <i class="fa-solid fa-gauge-high"></i>
+                        <span>Pressure</span>
+                        <strong id="pressure">1012 hPa</strong>
+                    </article>
+                    <article class="metric-card glass-panel violet">
+                        <i class="fa-regular fa-eye"></i>
+                        <span>Visibility</span>
+                        <strong id="visibility">8 km</strong>
+                    </article>
+                    <article class="metric-card glass-panel pink">
+                        <i class="fa-solid fa-temperature-half"></i>
+                        <span>Feels Like</span>
+                        <strong id="feels-like">31&deg;C</strong>
+                    </article>
+                    <article class="metric-card glass-panel blue">
+                        <i class="fa-solid fa-cloud-showers-heavy"></i>
+                        <span>Rain Chance</span>
+                        <strong id="rain-chance">28%</strong>
+                    </article>
+                </section>
+
+                <section class="hourly-panel glass-panel">
+                    <div class="panel-title">
+                        <h2>Hourly Forecast</h2>
+                        <button type="button">View Full Hourly <i class="fa-solid fa-arrow-right"></i></button>
                     </div>
-                </article>
-            </section>
+                    <div id="hourly-track" class="hourly-track"></div>
+                </section>
 
-            <section class="content-grid">
-                <div class="main-stack">
-                    <section class="panel">
-                        <div class="panel-header">
-                            <h3>5-Day Forecast</h3>
-                            <span id="forecast-city">Gujarat</span>
-                        </div>
-                        <div id="forecast-grid" class="forecast-grid"></div>
-                    </section>
+                <section class="forecast-panel glass-panel">
+                    <div class="panel-title">
+                        <h2>7 Day Forecast</h2>
+                        <button type="button">View Full Forecast <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                    <div id="forecast-list" class="forecast-list"></div>
+                </section>
 
-                    <section class="panel map-panel">
-                        <div class="panel-header">
-                            <h3>Weather Map</h3>
-                            <span>Live region view</span>
+                <section class="chart-panel glass-panel">
+                    <div class="chart-header">
+                        <h2>Temperature Overview</h2>
+                        <div class="tabs" aria-label="Chart tabs">
+                            <button class="active" type="button">Temperature</button>
+                            <button type="button">Humidity</button>
+                            <button type="button">Wind</button>
+                            <button type="button">Rainfall</button>
                         </div>
-                        <div class="map-canvas">
-                            <div class="map-pin pin-one"></div>
-                            <div class="map-pin pin-two"></div>
-                            <div class="map-pin pin-three"></div>
-                            <span>Gujarat</span>
+                    </div>
+                    <div class="chart-wrap">
+                        <div class="axis">
+                            <span>35&deg;</span>
+                            <span>30&deg;</span>
+                            <span>25&deg;</span>
+                            <span>20&deg;</span>
                         </div>
-                    </section>
-                </div>
+                        <svg class="temperature-chart" viewBox="0 0 620 170" role="img" aria-label="Temperature line chart">
+                            <path d="M0 138 L620 138" class="grid-line"></path>
+                            <path d="M0 92 L620 92" class="grid-line"></path>
+                            <path d="M0 46 L620 46" class="grid-line"></path>
+                            <path id="chart-fill" d=""></path>
+                            <path id="chart-line" d=""></path>
+                            <g id="chart-points"></g>
+                        </svg>
+                        <div class="chart-labels">
+                            <span>6 AM</span><span>9 AM</span><span>12 PM</span><span>3 PM</span><span>6 PM</span><span>9 PM</span><span>12 AM</span><span>3 AM</span>
+                        </div>
+                    </div>
+                </section>
 
-                <aside class="right-stack">
-                    <section class="panel photo-panel">
-                        <div class="photo-frame">
-                            <div class="weather-app-shot">
-                                <div class="shot-sidebar"></div>
-                                <div class="shot-main">
-                                    <span></span>
-                                    <strong>Ads in the new weather app?</strong>
-                                    <div class="shot-temp">72&deg;</div>
-                                    <div class="shot-strip"></div>
-                                    <div class="shot-ad">Sponsored</div>
-                                </div>
-                            </div>
+                <section class="map-panel glass-panel">
+                    <div class="panel-title">
+                        <h2>Weather Map</h2>
+                        <button type="button">View Full Map <i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                    <div class="map-canvas" aria-label="Stylized Gujarat weather map">
+                        <div class="map-tools">
+                            <button type="button"><i class="fa-solid fa-layer-group"></i></button>
+                            <button type="button"><i class="fa-solid fa-location-arrow"></i></button>
                         </div>
-                        <a class="source-link" href="https://www.reddit.com/r/Windows11/comments/1321tpx/ads_in_the_new_weather_app/" target="_blank" rel="noreferrer">
-                            Reddit photo reference
-                        </a>
-                    </section>
-
-                    <section class="panel alert-panel">
-                        <div class="panel-header">
-                            <h3>Today</h3>
-                            <span>Summary</span>
+                        <div class="zoom-tools">
+                            <button type="button">+</button>
+                            <button type="button">-</button>
                         </div>
-                        <p id="daily-summary">Weather details will appear here after loading.</p>
-                    </section>
-                </aside>
+                        <span class="city ahmedabad">Ahmedabad</span>
+                        <span class="city gandhinagar">Gandhinagar</span>
+                        <span class="city rajkot">Rajkot</span>
+                        <span class="city vadodara">Vadodara</span>
+                        <span class="city surat">Surat</span>
+                    </div>
+                </section>
             </section>
         </section>
-
-        <div id="error-message" class="error-message hidden">
-            <i class="fas fa-exclamation-triangle"></i>
-            <p id="error-text">Error message</p>
-            <button id="retry-btn">Retry</button>
-        </div>
     </main>
 
     <script src="script.js"></script>
