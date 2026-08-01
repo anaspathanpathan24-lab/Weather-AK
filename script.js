@@ -32,12 +32,32 @@ const chartLine = document.getElementById('chart-line');
 const chartFill = document.getElementById('chart-fill');
 const chartPoints = document.getElementById('chart-points');
 const updatedTime = document.getElementById('updated-time');
+const authScreen = document.getElementById('auth-screen');
+const authForm = document.getElementById('auth-form');
+const authTitle = document.getElementById('auth-title');
+const authSubtitle = document.getElementById('auth-subtitle');
+const authSubmit = document.getElementById('auth-submit');
+const authSwitch = document.getElementById('auth-switch');
+const authError = document.getElementById('auth-error');
+const nameField = document.getElementById('name-field');
+const authName = document.getElementById('auth-name');
+const authEmail = document.getElementById('auth-email');
+const authPassword = document.getElementById('auth-password');
+const logoutBtn = document.getElementById('logout-btn');
 const mobileMenuBtn = document.getElementById('mobile-menu-btn');
 const sidebar = document.querySelector('.sidebar');
 const navButtons = document.querySelectorAll('.nav-list button');
 
 let isDarkMode = false;
 let activeCity = 'Ahmedabad';
+let isRegisterMode = false;
+
+authForm.addEventListener('submit', handleAuthSubmit);
+authSwitch.addEventListener('click', toggleAuthMode);
+logoutBtn.addEventListener('click', async () => {
+    await fetch('auth.php?action=logout', { method: 'POST' });
+    window.location.reload();
+});
 
 mobileMenuBtn.addEventListener('click', () => {
     const isOpen = sidebar.classList.toggle('mobile-open');
@@ -81,10 +101,77 @@ citySearch.addEventListener('keydown', event => {
     if (event.key === 'Enter') runSearch();
 });
 
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
     document.body.setAttribute('data-theme', 'light');
-    fetchWeather(activeCity);
+    try {
+        const response = await fetch('auth.php?action=session');
+        const data = await response.json();
+        if (data.authenticated) {
+            startWeatherApp();
+        } else {
+            showAuthScreen();
+        }
+    } catch (error) {
+        showAuthError('Could not connect to the login service.');
+    }
 });
+
+async function handleAuthSubmit(event) {
+    event.preventDefault();
+    authError.textContent = '';
+    authSubmit.disabled = true;
+
+    const payload = {
+        name: authName.value.trim(),
+        email: authEmail.value.trim(),
+        password: authPassword.value
+    };
+
+    try {
+        const response = await fetch(`auth.php?action=${isRegisterMode ? 'register' : 'login'}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Authentication failed.');
+        startWeatherApp();
+    } catch (error) {
+        showAuthError(error.message);
+    } finally {
+        authSubmit.disabled = false;
+    }
+}
+
+function toggleAuthMode() {
+    isRegisterMode = !isRegisterMode;
+    nameField.classList.toggle('hidden', !isRegisterMode);
+    authName.required = isRegisterMode;
+    authPassword.autocomplete = isRegisterMode ? 'new-password' : 'current-password';
+    authTitle.textContent = isRegisterMode ? 'Create your account' : 'Welcome back';
+    authSubtitle.textContent = isRegisterMode
+        ? 'Register to save your weather experience.'
+        : 'Login to check live weather and forecasts.';
+    authSubmit.textContent = isRegisterMode ? 'Create Account' : 'Login';
+    authSwitch.textContent = isRegisterMode ? 'Already registered? Login here' : 'New here? Create an account';
+    authError.textContent = '';
+}
+
+function showAuthScreen() {
+    authScreen.classList.remove('hidden');
+    document.querySelector('.weather-app').classList.add('auth-locked');
+}
+
+function startWeatherApp() {
+    authScreen.classList.add('hidden');
+    document.querySelector('.weather-app').classList.remove('auth-locked');
+    fetchWeather(activeCity);
+}
+
+function showAuthError(message) {
+    authScreen.classList.remove('hidden');
+    authError.textContent = message;
+}
 
 function runSearch() {
     const city = citySearch.value.trim();
