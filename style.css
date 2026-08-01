@@ -44,9 +44,9 @@ button {
 }
 
 .weather-app {
-    width: min(1380px, calc(100vw - 40px));
-    min-height: 820px;
-    margin: 32px auto;
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
     padding: 16px 26px 26px 16px;
     display: grid;
     grid-template-columns: 132px 1fr;
@@ -789,7 +789,7 @@ button {
 @media (max-width: 1180px) {
     .weather-app {
         grid-template-columns: 1fr;
-        width: min(100vw - 24px, 960px);
+        width: 100%;
     }
 
     .sidebar {
