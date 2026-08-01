@@ -1,8 +1,8 @@
 :root {
-    --page-bg: #123456;
+    --page-bg: #0b5cad;
     --surface: #ffffff;
     --surface-soft: #f7fafc;
-    --surface-strong: #e6eef6;
+    --surface-strong: #d8ecff;
     --text: #17202a;
     --muted: #657386;
     --line: #d9e3ec;
@@ -51,7 +51,7 @@ body {
     z-index: 0;
     overflow: hidden;
     pointer-events: none;
-    background: #123456;
+    background: linear-gradient(135deg, #0b5cad, #42a5f5 55%, #90caf9);
     transition: background 1.2s ease, filter 1.2s ease;
 }
 
