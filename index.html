@@ -33,6 +33,16 @@
                     <span>Password</span>
                     <input id="auth-password" type="password" minlength="6" autocomplete="current-password" required>
                 </label>
+                <button id="forgot-password-btn" class="auth-link" type="button">Forgot password?</button>
+                <div id="forgot-password-panel" class="auth-reset-panel hidden">
+                    <p id="forgot-password-help" class="auth-help">Enter your email and we’ll create a temporary password for you.</p>
+                    <label class="auth-field">
+                        <span>Email address</span>
+                        <input id="auth-reset-email" type="email" autocomplete="email" placeholder="your@email.com">
+                    </label>
+                    <button id="reset-submit" class="auth-submit reset-submit" type="button">Send temporary password</button>
+                    <button id="reset-cancel" class="auth-switch" type="button">Back to login</button>
+                </div>
                 <p id="auth-error" class="auth-error" role="alert"></p>
                 <button id="auth-submit" class="auth-submit" type="submit">Login</button>
             </form>

@@ -40,6 +40,11 @@ const authTitle = document.getElementById('auth-title');
 const authSubtitle = document.getElementById('auth-subtitle');
 const authSubmit = document.getElementById('auth-submit');
 const authSwitch = document.getElementById('auth-switch');
+const forgotPasswordBtn = document.getElementById('forgot-password-btn');
+const forgotPasswordPanel = document.getElementById('forgot-password-panel');
+const resetEmail = document.getElementById('auth-reset-email');
+const resetSubmit = document.getElementById('reset-submit');
+const resetCancel = document.getElementById('reset-cancel');
 const authError = document.getElementById('auth-error');
 const nameField = document.getElementById('name-field');
 const authName = document.getElementById('auth-name');
@@ -56,6 +61,9 @@ let isRegisterMode = false;
 
 authForm.addEventListener('submit', handleAuthSubmit);
 authSwitch.addEventListener('click', toggleAuthMode);
+forgotPasswordBtn.addEventListener('click', toggleForgotPasswordPanel);
+resetSubmit.addEventListener('click', handleForgotPassword);
+resetCancel.addEventListener('click', hideForgotPasswordPanel);
 logoutBtn.addEventListener('click', async () => {
     await fetch('auth.php?action=logout', { method: 'POST' });
     window.location.reload();
@@ -120,7 +128,7 @@ window.addEventListener('load', async () => {
 
 async function handleAuthSubmit(event) {
     event.preventDefault();
-    authError.textContent = '';
+    setAuthMessage('');
     authSubmit.disabled = true;
 
     const payload = {
@@ -145,6 +153,32 @@ async function handleAuthSubmit(event) {
     }
 }
 
+async function handleForgotPassword() {
+    const email = resetEmail.value.trim().toLowerCase();
+    if (!email) {
+        setAuthMessage('Please enter your email address to reset your password.');
+        return;
+    }
+
+    resetSubmit.disabled = true;
+    try {
+        const response = await fetch('auth.php?action=forgot_password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Password reset failed.');
+        authEmail.value = email;
+        setAuthMessage(data.message || 'Temporary password created.', true);
+        hideForgotPasswordPanel();
+    } catch (error) {
+        setAuthMessage(error.message);
+    } finally {
+        resetSubmit.disabled = false;
+    }
+}
+
 function toggleAuthMode() {
     isRegisterMode = !isRegisterMode;
     nameField.classList.toggle('hidden', !isRegisterMode);
@@ -156,7 +190,23 @@ function toggleAuthMode() {
         : 'Login to check live weather and forecasts.';
     authSubmit.textContent = isRegisterMode ? 'Create Account' : 'Login';
     authSwitch.textContent = isRegisterMode ? 'Already registered? Login here' : 'New here? Create an account';
-    authError.textContent = '';
+    hideForgotPasswordPanel();
+    setAuthMessage('');
+}
+
+function toggleForgotPasswordPanel() {
+    if (forgotPasswordPanel.classList.contains('hidden')) {
+        forgotPasswordPanel.classList.remove('hidden');
+        forgotPasswordBtn.textContent = 'Back to login';
+        resetEmail.focus();
+    } else {
+        hideForgotPasswordPanel();
+    }
+}
+
+function hideForgotPasswordPanel() {
+    forgotPasswordPanel.classList.add('hidden');
+    forgotPasswordBtn.textContent = 'Forgot password?';
 }
 
 function showAuthScreen() {
@@ -172,7 +222,12 @@ function startWeatherApp() {
 
 function showAuthError(message) {
     authScreen.classList.remove('hidden');
+    setAuthMessage(message);
+}
+
+function setAuthMessage(message, isSuccess = false) {
     authError.textContent = message;
+    authError.classList.toggle('auth-success', isSuccess);
 }
 
 function runSearch() {

@@ -26,11 +26,31 @@ if ($action === 'logout') {
     respond(['success' => true]);
 }
 
-if ($action !== 'register' && $action !== 'login') {
+if ($action !== 'register' && $action !== 'login' && $action !== 'forgot_password') {
     respond(['error' => 'Invalid authentication action.'], 400);
 }
 
 $email = strtolower(trim((string) ($input['email'] ?? '')));
+
+if ($action === 'forgot_password') {
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        respond(['error' => 'Please enter a valid email address.'], 422);
+    }
+
+    $statement = $db->prepare('SELECT id, email FROM users WHERE email = ? LIMIT 1');
+    $statement->execute([$email]);
+    $user = $statement->fetch(PDO::FETCH_ASSOC);
+
+    if ($user) {
+        $tempPassword = 'Weather' . random_int(1000, 9999) . '!';
+        $resetStatement = $db->prepare('UPDATE users SET password = ? WHERE email = ?');
+        $resetStatement->execute([password_hash($tempPassword, PASSWORD_DEFAULT), $email]);
+        respond(['success' => true, 'message' => "Temporary password created: {$tempPassword}"]);
+    }
+
+    respond(['success' => true, 'message' => 'If that email exists, a temporary password has been created.']);
+}
+
 $password = (string) ($input['password'] ?? '');
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 6) {

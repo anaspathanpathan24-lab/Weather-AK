@@ -122,10 +122,39 @@ body {
     font-weight: 700;
 }
 
+.auth-link {
+    margin-top: -2px;
+    background: transparent;
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.auth-reset-panel {
+    display: grid;
+    gap: 10px;
+    margin-top: 6px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.auth-help {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .auth-error {
     min-height: 16px;
     color: #ffd4d4;
     font-size: 12px;
+}
+
+.auth-error.auth-success {
+    color: #d9ffe4;
 }
 
 .auth-locked {
