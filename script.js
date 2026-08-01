@@ -32,9 +32,30 @@ const chartLine = document.getElementById('chart-line');
 const chartFill = document.getElementById('chart-fill');
 const chartPoints = document.getElementById('chart-points');
 const updatedTime = document.getElementById('updated-time');
+const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+const sidebar = document.querySelector('.sidebar');
+const navButtons = document.querySelectorAll('.nav-list button');
 
 let isDarkMode = false;
 let activeCity = 'Ahmedabad';
+
+mobileMenuBtn.addEventListener('click', () => {
+    const isOpen = sidebar.classList.toggle('mobile-open');
+    mobileMenuBtn.setAttribute('aria-expanded', String(isOpen));
+    mobileMenuBtn.setAttribute('aria-label', isOpen ? 'Close navigation' : 'Open navigation');
+    mobileMenuBtn.innerHTML = isOpen
+        ? '<i class="fa-solid fa-xmark"></i>'
+        : '<i class="fa-solid fa-bars"></i>';
+});
+
+navButtons.forEach(button => {
+    button.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        mobileMenuBtn.setAttribute('aria-expanded', 'false');
+        mobileMenuBtn.setAttribute('aria-label', 'Open navigation');
+        mobileMenuBtn.innerHTML = '<i class="fa-solid fa-bars"></i>';
+    });
+});
 
 fetch('api/cities.json')
     .then(response => response.json())

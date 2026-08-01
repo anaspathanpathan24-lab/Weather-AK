@@ -49,6 +49,7 @@ button {
     margin: 0;
     padding: 16px 26px 26px 16px;
     display: grid;
+    position: relative;
     grid-template-columns: 132px 1fr;
     gap: 16px;
     background:
@@ -176,6 +177,10 @@ button {
 }
 
 .mobile-brand {
+    display: none;
+}
+
+.mobile-menu-btn {
     display: none;
 }
 
@@ -796,8 +801,44 @@ button {
         display: none;
     }
 
+    .sidebar.mobile-open {
+        position: absolute;
+        z-index: 10;
+        top: 86px;
+        left: 14px;
+        right: 14px;
+        display: block;
+        padding: 14px;
+        border: 1px solid var(--panel-line);
+        border-radius: 12px;
+        background: rgba(63, 76, 201, 0.96);
+        box-shadow: 0 18px 40px rgba(26, 29, 101, 0.3);
+        backdrop-filter: blur(18px) saturate(130%);
+    }
+
+    .sidebar.mobile-open .brand,
+    .sidebar.mobile-open .premium-card {
+        display: none;
+    }
+
+    .sidebar.mobile-open .nav-list {
+        gap: 8px;
+    }
+
     .mobile-brand {
         display: flex;
+        justify-content: space-between;
+    }
+
+    .mobile-menu-btn {
+        width: 42px;
+        height: 42px;
+        border: 1px solid var(--panel-line);
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: var(--panel);
+        font-size: 17px;
     }
 
     .topbar {
