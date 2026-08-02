@@ -11,7 +11,7 @@
         <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/20 text-3xl">✅</div>
         <h1 class="text-3xl font-semibold">Password Changed Successfully</h1>
         <p class="mt-3 text-sm text-slate-300">Your password has been updated successfully. You can now log in with your new credentials.</p>
-        <a href="{{ route('login') }}" class="mt-6 inline-block rounded-2xl bg-cyan-400 px-5 py-3 font-semibold text-slate-900 transition hover:bg-cyan-300">Go to Login</a>
+        <a href="{{ url('/login') }}" class="mt-6 inline-block rounded-2xl bg-cyan-400 px-5 py-3 font-semibold text-slate-900 transition hover:bg-cyan-300">Go to Login</a>
     </div>
 </body>
 </html>

@@ -36,7 +36,7 @@
         </form>
 
         <div class="mt-6 text-center text-sm text-slate-300">
-            <a href="{{ route('login') }}" class="text-cyan-300 hover:underline">Back to login</a>
+            <a href="{{ url('/login') }}" class="text-cyan-300 hover:underline">Back to login</a>
         </div>
     </div>
 </body>
