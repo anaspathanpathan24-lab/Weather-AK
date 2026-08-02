@@ -1,10 +1,25 @@
 <?php
+// Prevent PHP warnings or notices from being sent to clients as HTML
+@ini_set('display_errors', '0');
+@error_reporting(0);
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 $db = new PDO('sqlite:' . __DIR__ . '/includes/users.sqlite');
 $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-$db->exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created_at TEXT NOT NULL, reset_token TEXT, otp TEXT, otp_expires TEXT)');
+$db->exec('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, password TEXT NOT NULL, created_at TEXT NOT NULL)');
+
+$existingColumns = $db->query("PRAGMA table_info(users)")->fetchAll(PDO::FETCH_ASSOC);
+$existingColumnNames = array_column($existingColumns, 'name');
+if (!in_array('reset_token', $existingColumnNames, true)) {
+    $db->exec('ALTER TABLE users ADD COLUMN reset_token TEXT');
+}
+if (!in_array('otp', $existingColumnNames, true)) {
+    $db->exec('ALTER TABLE users ADD COLUMN otp TEXT');
+}
+if (!in_array('otp_expires', $existingColumnNames, true)) {
+    $db->exec('ALTER TABLE users ADD COLUMN otp_expires TEXT');
+}
 
 $action = $_GET['action'] ?? '';
 
@@ -73,11 +88,48 @@ if ($action === 'forgot_password') {
         $updateStatement = $db->prepare('UPDATE users SET reset_token = ?, otp = ?, otp_expires = ? WHERE email = ?');
         $updateStatement->execute([$token, $otp, $otpExpires, $email]);
 
-        if ($mode === 'otp') {
-            respond(['success' => true, 'message' => "OTP sent to {$email}. Use code: {$otp}"]);
+        // Attempt to send email (if mail is configured). If mail() fails or is not configured,
+        // write the token/otp to a server-side log file so you can verify the values locally.
+        $logLine = sprintf("[%s] reset for %s mode=%s token=%s otp=%s expires=%s\n", date('c'), $email, $mode, $token, $otp, $otpExpires);
+        $logFile = __DIR__ . '/includes/reset_log.txt';
+        try {
+            // Try PHP mail() - this requires your server's mail to be configured.
+            if ($mode === 'otp') {
+                $subject = 'Your OTP code';
+                $body = "Your OTP for Gujarat Weather is: {$otp} (valid 15 minutes)";
+            } else {
+                $resetUrl = (isset($_SERVER['REQUEST_SCHEME']) ? $_SERVER['REQUEST_SCHEME'] : 'http') . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . dirname($_SERVER['REQUEST_URI']) . "/auth.php?action=change_password&token={$token}";
+                $subject = 'Password reset link';
+                $body = "Use this link to reset your password: {$resetUrl}\nThis link expires in 15 minutes.";
+            }
+
+            $headers = "From: no-reply@{$email}\r\n" .
+                       "Reply-To: no-reply@{$email}\r\n" .
+                       "X-Mailer: PHP/" . phpversion();
+
+            $mailSent = false;
+            if (function_exists('mail')) {
+                $mailSent = @mail($email, $subject, $body, $headers);
+            }
+
+            // Always append to log for debugging (useful when mail isn't configured)
+            @file_put_contents($logFile, $logLine, FILE_APPEND | LOCK_EX);
+
+            if ($mailSent) {
+                if ($mode === 'otp') {
+                    respond(['success' => true, 'message' => "OTP sent to {$email}. Check your inbox."]);
+                }
+                respond(['success' => true, 'message' => "Reset link sent to {$email}. Check your inbox."]);
+            }
+        } catch (Exception $e) {
+            // fall through to fallback message
         }
 
-        respond(['success' => true, 'message' => "Reset link generated for {$email}. Use token: {$token}"]);
+        // Fallback: do not reveal sensitive codes in production; for local debugging we inform where to find them.
+        if ($mode === 'otp') {
+            respond(['success' => true, 'message' => "OTP generated and logged on server (check includes/reset_log.txt)."]);
+        }
+        respond(['success' => true, 'message' => "Reset token generated and logged on server (check includes/reset_log.txt)."]);
     }
 
     respond(['success' => true, 'message' => 'If that email exists, recovery options are ready.']);

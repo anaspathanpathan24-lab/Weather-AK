@@ -63,17 +63,28 @@ let isDarkMode = false;
 let activeCity = 'Ahmedabad';
 let isRegisterMode = false;
 
-authForm.addEventListener('submit', handleAuthSubmit);
-authSwitch.addEventListener('click', toggleAuthMode);
-forgotPasswordBtn.addEventListener('click', toggleForgotPasswordPanel);
-resetLinkBtn.addEventListener('click', handleResetLink);
-otpBtn.addEventListener('click', handleOtpRequest);
-otpVerifyBtn.addEventListener('click', handleOtpVerify);
-resetCancel.addEventListener('click', hideForgotPasswordPanel);
-logoutBtn.addEventListener('click', async () => {
-    await fetch('auth.php?action=logout', { method: 'POST' });
-    window.location.reload();
-});
+// attach auth-related listeners safely
+try {
+    if (authForm) authForm.addEventListener('submit', handleAuthSubmit);
+    if (authSwitch) authSwitch.addEventListener('click', toggleAuthMode);
+    if (forgotPasswordBtn) forgotPasswordBtn.addEventListener('click', toggleForgotPasswordPanel);
+    if (typeof resetLinkBtn !== 'undefined' && resetLinkBtn) resetLinkBtn.addEventListener('click', handleResetLink);
+    if (typeof otpBtn !== 'undefined' && otpBtn) otpBtn.addEventListener('click', handleOtpRequest);
+    if (typeof otpVerifyBtn !== 'undefined' && otpVerifyBtn) otpVerifyBtn.addEventListener('click', handleOtpVerify);
+    if (resetCancel) resetCancel.addEventListener('click', hideForgotPasswordPanel);
+    logoutBtn.addEventListener('click', async () => {
+        // noop - replaced below
+    });
+} catch (e) {
+    console.error('Auth event binding error:', e);
+}
+// ensure logout listener exists (re-attach to avoid noop above)
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+        await fetch('auth.php?action=logout', { method: 'POST' });
+        window.location.reload();
+    });
+}
 
 mobileMenuBtn.addEventListener('click', () => {
     const isOpen = sidebar.classList.toggle('mobile-open');
@@ -165,20 +176,28 @@ async function handleResetLink() {
         setAuthMessage('Please enter your email address first.');
         return;
     }
+    if (!resetLinkBtn) {
+        console.warn('Reset link button not found');
+        setAuthMessage('Reset link button unavailable.');
+        return;
+    }
 
     resetLinkBtn.disabled = true;
     try {
+        console.log('Requesting reset link for', email);
         const response = await fetch('auth.php?action=forgot_password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
             body: new URLSearchParams({ email, mode: 'link' }).toString()
         });
-        const data = await response.json();
+        const data = await parseJsonResponse(response);
         if (!response.ok) throw new Error(data.error || 'Reset link failed.');
+        console.log('Reset link response', data, response.status);
         authEmail.value = email;
         setAuthMessage(data.message || 'Reset link sent to your email.', true);
     } catch (error) {
-        setAuthMessage(error.message);
+        console.error('Reset link error', error);
+        setAuthMessage(error.message || 'Reset link failed.');
     } finally {
         resetLinkBtn.disabled = false;
     }
@@ -190,23 +209,31 @@ async function handleOtpRequest() {
         setAuthMessage('Please enter your email address first.');
         return;
     }
+    if (!otpBtn) {
+        console.warn('OTP button not found');
+        setAuthMessage('OTP button unavailable.');
+        return;
+    }
 
     otpBtn.disabled = true;
     try {
+        console.log('Requesting OTP for', email);
         const response = await fetch('auth.php?action=forgot_password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
             body: new URLSearchParams({ email, mode: 'otp' }).toString()
         });
-        const data = await response.json();
+        const data = await parseJsonResponse(response);
+        console.log('OTP request response', data, response.status);
         if (!response.ok) throw new Error(data.error || 'OTP request failed.');
         authEmail.value = email;
-        otpField.classList.remove('hidden');
-        otpVerifyBtn.classList.remove('hidden');
-        otpInput.focus();
+        if (otpField) otpField.classList.remove('hidden');
+        if (otpVerifyBtn) otpVerifyBtn.classList.remove('hidden');
+        if (otpInput) otpInput.focus();
         setAuthMessage(data.message || 'OTP sent to your email.', true);
     } catch (error) {
-        setAuthMessage(error.message);
+        console.error('OTP request error', error);
+        setAuthMessage(error.message || 'OTP request failed.');
     } finally {
         otpBtn.disabled = false;
     }
@@ -219,23 +246,56 @@ async function handleOtpVerify() {
         setAuthMessage('Please enter the OTP you received.');
         return;
     }
+    if (!otpVerifyBtn) {
+        console.warn('OTP verify button not found');
+        setAuthMessage('OTP verify unavailable.');
+        return;
+    }
 
     otpVerifyBtn.disabled = true;
     try {
+        console.log('Verifying OTP for', email, otp);
         const response = await fetch('auth.php?action=verify_otp', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
             body: new URLSearchParams({ email, otp }).toString()
         });
-        const data = await response.json();
+        const data = await parseJsonResponse(response);
+        console.log('OTP verify response', data, response.status);
         if (!response.ok) throw new Error(data.error || 'OTP verification failed.');
         setAuthMessage(data.message || 'OTP verified. You can now change your password.', true);
         showPasswordChangeForm(email);
     } catch (error) {
-        setAuthMessage(error.message);
+        console.error('OTP verify error', error);
+        setAuthMessage(error.message || 'OTP verification failed.');
     } finally {
         otpVerifyBtn.disabled = false;
     }
+}
+
+// Helper to safely parse JSON responses and log non-JSON content for debugging
+async function parseJsonResponse(response) {
+    const ct = response.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+        try {
+            // Use clone() so we can safely read raw text for debugging if JSON.parse fails.
+            const raw = await response.clone().text();
+            try {
+                return JSON.parse(raw);
+            } catch (e) {
+                console.error('JSON parse error, server returned:', raw);
+                throw new Error('Invalid JSON response from server. See console for details.');
+            }
+        } catch (e) {
+            console.error('Failed to read response body clone:', e);
+            throw new Error('Could not read server response. See console for details.');
+        }
+    }
+
+    // Non-JSON response: capture text for debugging
+    const text = await response.text();
+    console.error('Expected JSON but server returned:', text);
+    throw new Error('Server returned non-JSON response. See console for details.');
 }
 
 function showPasswordChangeForm(email) {
@@ -267,7 +327,7 @@ function showPasswordChangeForm(email) {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
                 body: new URLSearchParams({ email, password: newPassword }).toString()
             });
-            const data = await response.json();
+            const data = await parseJsonResponse(response);
             if (!response.ok) throw new Error(data.error || 'Password change failed.');
             setAuthMessage(data.message || 'Password changed successfully.', true);
             hideForgotPasswordPanel();

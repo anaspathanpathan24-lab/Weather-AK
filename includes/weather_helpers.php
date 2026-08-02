@@ -1,4 +1,7 @@
 <?php
+// Suppress accidental PHP output from notices/warnings in helper routines
+@ini_set('display_errors', '0');
+@error_reporting(0);
 
 function fetchJson(string $url): ?array
 {
