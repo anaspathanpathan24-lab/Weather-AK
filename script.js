@@ -43,7 +43,11 @@ const authSwitch = document.getElementById('auth-switch');
 const forgotPasswordBtn = document.getElementById('forgot-password-btn');
 const forgotPasswordPanel = document.getElementById('forgot-password-panel');
 const resetEmail = document.getElementById('auth-reset-email');
-const resetSubmit = document.getElementById('reset-submit');
+const resetLinkBtn = document.getElementById('reset-link-btn');
+const otpBtn = document.getElementById('otp-btn');
+const otpField = document.getElementById('otp-field');
+const otpInput = document.getElementById('auth-otp');
+const otpVerifyBtn = document.getElementById('otp-verify-btn');
 const resetCancel = document.getElementById('reset-cancel');
 const authError = document.getElementById('auth-error');
 const nameField = document.getElementById('name-field');
@@ -62,7 +66,9 @@ let isRegisterMode = false;
 authForm.addEventListener('submit', handleAuthSubmit);
 authSwitch.addEventListener('click', toggleAuthMode);
 forgotPasswordBtn.addEventListener('click', toggleForgotPasswordPanel);
-resetSubmit.addEventListener('click', handleForgotPassword);
+resetLinkBtn.addEventListener('click', handleResetLink);
+otpBtn.addEventListener('click', handleOtpRequest);
+otpVerifyBtn.addEventListener('click', handleOtpVerify);
 resetCancel.addEventListener('click', hideForgotPasswordPanel);
 logoutBtn.addEventListener('click', async () => {
     await fetch('auth.php?action=logout', { method: 'POST' });
@@ -140,8 +146,8 @@ async function handleAuthSubmit(event) {
     try {
         const response = await fetch(`auth.php?action=${isRegisterMode ? 'register' : 'login'}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: new URLSearchParams(payload).toString()
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Authentication failed.');
@@ -153,30 +159,122 @@ async function handleAuthSubmit(event) {
     }
 }
 
-async function handleForgotPassword() {
+async function handleResetLink() {
     const email = resetEmail.value.trim().toLowerCase();
     if (!email) {
-        setAuthMessage('Please enter your email address to reset your password.');
+        setAuthMessage('Please enter your email address first.');
         return;
     }
 
-    resetSubmit.disabled = true;
+    resetLinkBtn.disabled = true;
     try {
         const response = await fetch('auth.php?action=forgot_password', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: new URLSearchParams({ email, mode: 'link' }).toString()
         });
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Password reset failed.');
+        if (!response.ok) throw new Error(data.error || 'Reset link failed.');
         authEmail.value = email;
-        setAuthMessage(data.message || 'Temporary password created.', true);
-        hideForgotPasswordPanel();
+        setAuthMessage(data.message || 'Reset link sent to your email.', true);
     } catch (error) {
         setAuthMessage(error.message);
     } finally {
-        resetSubmit.disabled = false;
+        resetLinkBtn.disabled = false;
     }
+}
+
+async function handleOtpRequest() {
+    const email = resetEmail.value.trim().toLowerCase();
+    if (!email) {
+        setAuthMessage('Please enter your email address first.');
+        return;
+    }
+
+    otpBtn.disabled = true;
+    try {
+        const response = await fetch('auth.php?action=forgot_password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: new URLSearchParams({ email, mode: 'otp' }).toString()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'OTP request failed.');
+        authEmail.value = email;
+        otpField.classList.remove('hidden');
+        otpVerifyBtn.classList.remove('hidden');
+        otpInput.focus();
+        setAuthMessage(data.message || 'OTP sent to your email.', true);
+    } catch (error) {
+        setAuthMessage(error.message);
+    } finally {
+        otpBtn.disabled = false;
+    }
+}
+
+async function handleOtpVerify() {
+    const email = resetEmail.value.trim().toLowerCase();
+    const otp = otpInput.value.trim();
+    if (!email || !otp) {
+        setAuthMessage('Please enter the OTP you received.');
+        return;
+    }
+
+    otpVerifyBtn.disabled = true;
+    try {
+        const response = await fetch('auth.php?action=verify_otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: new URLSearchParams({ email, otp }).toString()
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'OTP verification failed.');
+        setAuthMessage(data.message || 'OTP verified. You can now change your password.', true);
+        showPasswordChangeForm(email);
+    } catch (error) {
+        setAuthMessage(error.message);
+    } finally {
+        otpVerifyBtn.disabled = false;
+    }
+}
+
+function showPasswordChangeForm(email) {
+    const currentForm = document.querySelector('.auth-form');
+    const newPasswordMarkup = `
+        <label class="auth-field">
+            <span>New password</span>
+            <input id="new-password" type="password" minlength="6" autocomplete="new-password" required>
+        </label>
+        <label class="auth-field">
+            <span>Confirm password</span>
+            <input id="confirm-password" type="password" minlength="6" autocomplete="new-password" required>
+        </label>
+        <button id="change-password-btn" class="auth-submit" type="button">Change password</button>
+    `;
+
+    currentForm.insertAdjacentHTML('beforeend', newPasswordMarkup);
+    document.getElementById('change-password-btn').addEventListener('click', async () => {
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-password').value;
+        if (newPassword.length < 6 || newPassword !== confirmPassword) {
+            setAuthMessage('Passwords must match and be at least 6 characters long.');
+            return;
+        }
+
+        try {
+            const response = await fetch('auth.php?action=change_password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: new URLSearchParams({ email, password: newPassword }).toString()
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Password change failed.');
+            setAuthMessage(data.message || 'Password changed successfully.', true);
+            hideForgotPasswordPanel();
+        } catch (error) {
+            setAuthMessage(error.message);
+        }
+    });
 }
 
 function toggleAuthMode() {
@@ -207,6 +305,9 @@ function toggleForgotPasswordPanel() {
 function hideForgotPasswordPanel() {
     forgotPasswordPanel.classList.add('hidden');
     forgotPasswordBtn.textContent = 'Forgot password?';
+    otpField.classList.add('hidden');
+    otpVerifyBtn.classList.add('hidden');
+    otpInput.value = '';
 }
 
 function showAuthScreen() {

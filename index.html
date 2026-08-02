@@ -35,12 +35,18 @@
                 </label>
                 <button id="forgot-password-btn" class="auth-link" type="button">Forgot password?</button>
                 <div id="forgot-password-panel" class="auth-reset-panel hidden">
-                    <p id="forgot-password-help" class="auth-help">Enter your email and we’ll create a temporary password for you.</p>
+                    <p id="forgot-password-help" class="auth-help">Choose how you want to recover access.</p>
                     <label class="auth-field">
                         <span>Email address</span>
                         <input id="auth-reset-email" type="email" autocomplete="email" placeholder="your@email.com">
                     </label>
-                    <button id="reset-submit" class="auth-submit reset-submit" type="button">Send temporary password</button>
+                    <button id="reset-link-btn" class="auth-submit reset-submit" type="button">Send reset link</button>
+                    <button id="otp-btn" class="auth-submit reset-submit" type="button">Send OTP</button>
+                    <label id="otp-field" class="auth-field hidden">
+                        <span>Enter OTP</span>
+                        <input id="auth-otp" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="123456">
+                    </label>
+                    <button id="otp-verify-btn" class="auth-submit reset-submit hidden" type="button">Verify OTP</button>
                     <button id="reset-cancel" class="auth-switch" type="button">Back to login</button>
                 </div>
                 <p id="auth-error" class="auth-error" role="alert"></p>
