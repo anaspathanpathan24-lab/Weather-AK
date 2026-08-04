@@ -3,24 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Password Reset OTP</title>
+    <title>Weather Application - Password Reset OTP</title>
 </head>
-<body style="font-family: Arial, sans-serif; background:#0f172a; color:#f8fafc; margin:0; padding:24px;">
-    <div style="max-width:600px; margin:auto; background:#111827; border:1px solid #334155; border-radius:16px; overflow:hidden;">
-        <div style="padding:24px; text-align:center; background:linear-gradient(135deg,#0ea5e9,#22c55e);">
-            <h1 style="margin:0; font-size:24px; color:#fff;">Weather Dashboard</h1>
+<body style="margin:0; padding:0; background:#f4f7fb; font-family:Arial, sans-serif; color:#0f172a;">
+    <div style="max-width:640px; margin:32px auto; background:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 12px 32px rgba(15,23,42,0.08);">
+        <div style="background:linear-gradient(135deg,#0f172a 0%,#2563eb 100%); padding:28px 24px; text-align:center; color:#ffffff;">
+            <h1 style="margin:0; font-size:28px;">Weather Application</h1>
+            <p style="margin:8px 0 0; opacity:0.9;">Secure password recovery</p>
         </div>
-        <div style="padding:24px;">
-            <p style="font-size:16px;">Hello,</p>
-            <p style="font-size:16px;">Your One-Time Password (OTP) is:</p>
-            <div style="margin:24px 0; padding:20px; text-align:center; background:#1f2937; border-radius:12px; font-size:34px; letter-spacing:4px; font-weight:bold; color:#fef08a;">
-                {{ $otp }}
+        <div style="padding:32px 24px;">
+            <p style="margin:0 0 10px; font-size:16px;">Hello,</p>
+            <p style="margin:0 0 16px; font-size:16px; line-height:1.6;">Use the one-time password below to continue resetting your password.</p>
+            <div style="text-align:center; margin:24px 0; padding:20px 16px; border-radius:14px; background:#eff6ff; border:1px solid #bfdbfe;">
+                <div style="font-size:13px; text-transform:uppercase; letter-spacing:0.2em; color:#2563eb; margin-bottom:8px;">Your OTP</div>
+                <div style="font-size:34px; font-weight:bold; letter-spacing:0.3em; color:#0f172a;">{{ $otp }}</div>
             </div>
-            <p style="font-size:14px; color:#cbd5e1;">This OTP is valid for only 10 minutes.</p>
-            <p style="font-size:14px; color:#cbd5e1;">Do not share this OTP with anyone.</p>
+            <p style="margin:0 0 8px; font-size:14px; color:#475569;">This OTP is valid for 10 minutes.</p>
+            <p style="margin:0; font-size:14px; color:#475569;">Please do not share this code with anyone.</p>
         </div>
-        <div style="padding:24px; text-align:center; font-size:12px; color:#94a3b8; border-top:1px solid #334155;">
-            This email was sent for password reset purposes.
+        <div style="padding:24px; background:#f8fafc; text-align:center; font-size:12px; color:#64748b; border-top:1px solid #e2e8f0;">
+            Need help? Contact <a href="mailto:support@weatherapp.com" style="color:#2563eb; text-decoration:none;">support@weatherapp.com</a>
         </div>
     </div>
 </body>

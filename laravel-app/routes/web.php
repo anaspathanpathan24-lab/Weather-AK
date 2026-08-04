@@ -7,6 +7,10 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('/csrf-token', function () {
+    return response()->json(['csrf_token' => csrf_token()]);
+});
+
 Route::get('/forgot-password', [AuthPasswordResetController::class, 'requestForm'])->name('password.request');
 Route::post('/forgot-password', [AuthPasswordResetController::class, 'sendOtp'])->name('password.send');
 Route::get('/verify-otp', [AuthPasswordResetController::class, 'verifyForm'])->name('password.verify.form');

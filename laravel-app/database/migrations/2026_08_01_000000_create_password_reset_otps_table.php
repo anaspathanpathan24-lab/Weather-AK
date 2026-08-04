@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('password_reset_otps', function (Blueprint $table) {
             $table->id();
-            $table->string('email');
-            $table->string('otp', 6);
+            $table->string('email')->index();
+            $table->string('otp');
             $table->boolean('verified')->default(false);
             $table->timestamp('expires_at');
             $table->timestamps();

@@ -1,38 +1,46 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reset Password</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Reset Password | Weather Application</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #071120 0%, #102542 100%); min-height: 100vh; }
+        .card { border: 0; border-radius: 1.25rem; box-shadow: 0 18px 48px rgba(0,0,0,0.25); }
+        .form-control { border-radius: 0.9rem; padding: 0.85rem 1rem; }
+        .btn-primary { border-radius: 0.9rem; padding: 0.8rem 1rem; }
+    </style>
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(31,41,55,0.95),_rgba(15,23,42,1))] text-white flex items-center justify-center px-4 py-10">
-    <div class="w-full max-w-md rounded-3xl border border-white/20 bg-white/10 p-8 shadow-2xl backdrop-blur-xl">
-        <div class="mb-6 text-center">
-            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-400/20 text-2xl">🔒</div>
-            <h1 class="text-3xl font-semibold">Reset Password</h1>
-            <p class="mt-2 text-sm text-slate-300">Create a new strong password for <span class="font-medium text-cyan-300">{{ $email }}</span>.</p>
+<body>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-5">
+            <div class="card p-4 p-md-5 text-body">
+                <div class="text-center mb-4">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-success bg-opacity-10 text-success" style="width: 64px; height: 64px; font-size: 1.4rem;">🔒</div>
+                    <h1 class="h3 mt-3 mb-2">Create a new password</h1>
+                    <p class="text-muted mb-0">Set a strong password for <strong>{{ $email }}</strong>.</p>
+                </div>
+                <div id="form-message" class="alert d-none" role="alert"></div>
+                <form id="reset-password-form" class="needs-validation" novalidate>
+                    @csrf
+                    <input type="hidden" name="email" value="{{ $email }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="password">New password</label>
+                        <input id="password" name="password" type="password" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="password_confirmation">Confirm password</label>
+                        <input id="password_confirmation" name="password_confirmation" type="password" class="form-control" required>
+                    </div>
+                    <button id="submit-btn" type="submit" class="btn btn-primary w-100">Reset password</button>
+                </form>
+            </div>
         </div>
-
-        @if ($errors->any())
-            <div class="mb-4 rounded-xl border border-red-400/40 bg-red-500/20 px-4 py-3 text-sm text-red-100">
-                {{ $errors->first() }}
-            </div>
-        @endif
-
-        <form method="POST" action="{{ route('password.update') }}" class="space-y-4">
-            @csrf
-            <input type="hidden" name="email" value="{{ $email }}">
-            <div>
-                <label class="mb-2 block text-sm font-medium text-slate-200" for="password">New Password</label>
-                <input id="password" name="password" type="password" required class="w-full rounded-2xl border border-white/20 bg-slate-900/60 px-4 py-3 text-white outline-none focus:border-cyan-400">
-            </div>
-            <div>
-                <label class="mb-2 block text-sm font-medium text-slate-200" for="password_confirmation">Confirm Password</label>
-                <input id="password_confirmation" name="password_confirmation" type="password" required class="w-full rounded-2xl border border-white/20 bg-slate-900/60 px-4 py-3 text-white outline-none focus:border-cyan-400">
-            </div>
-            <button type="submit" class="w-full rounded-2xl bg-emerald-400 px-4 py-3 font-semibold text-slate-900 transition hover:bg-emerald-300">Update Password</button>
-        </form>
     </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ asset('js/app.js') }}"></script>
 </body>
 </html>

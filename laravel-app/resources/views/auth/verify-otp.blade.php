@@ -1,44 +1,45 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verify OTP</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Verify OTP | Weather Application</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #071120 0%, #102542 100%); min-height: 100vh; }
+        .card { border: 0; border-radius: 1.25rem; box-shadow: 0 18px 48px rgba(0,0,0,0.25); }
+        .form-control { border-radius: 0.9rem; padding: 0.85rem 1rem; letter-spacing: 0.3em; text-align: center; font-size: 1.25rem; }
+        .btn-primary { border-radius: 0.9rem; padding: 0.8rem 1rem; }
+    </style>
 </head>
-<body class="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(31,41,55,0.95),_rgba(15,23,42,1))] text-white flex items-center justify-center px-4 py-10">
-    <div class="w-full max-w-md rounded-3xl border border-white/20 bg-white/10 p-8 shadow-2xl backdrop-blur-xl">
-        <div class="mb-6 text-center">
-            <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-400/20 text-2xl">✉️</div>
-            <h1 class="text-3xl font-semibold">Verify OTP</h1>
-            <p class="mt-2 text-sm text-slate-300">Enter the 6-digit code sent to <span class="font-medium text-cyan-300">{{ $email }}</span>.</p>
-        </div>
-
-        @if ($errors->any())
-            <div class="mb-4 rounded-xl border border-red-400/40 bg-red-500/20 px-4 py-3 text-sm text-red-100">
-                {{ $errors->first() }}
+<body>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-12 col-md-8 col-lg-5">
+            <div class="card p-4 p-md-5 text-body">
+                <div class="text-center mb-4">
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10 text-warning" style="width: 64px; height: 64px; font-size: 1.4rem;">✉️</div>
+                    <h1 class="h3 mt-3 mb-2">Verify OTP</h1>
+                    <p class="text-muted mb-0">Enter the 6-digit verification code sent to <strong>{{ $email }}</strong>.</p>
+                </div>
+                <div id="form-message" class="alert d-none" role="alert"></div>
+                <form id="verify-otp-form" class="needs-validation" novalidate>
+                    @csrf
+                    <input type="hidden" name="email" value="{{ $email }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="otp">One-time password</label>
+                        <input id="otp" name="otp" type="text" maxlength="6" class="form-control" placeholder="123456" required>
+                    </div>
+                    <button id="submit-btn" type="submit" class="btn btn-primary w-100">Verify OTP</button>
+                </form>
+                <div class="text-center mt-4">
+                    <a href="{{ route('password.request') }}" class="text-decoration-none">Request a new OTP</a>
+                </div>
             </div>
-        @endif
-
-        @if (session('success'))
-            <div class="mb-4 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-4 py-3 text-sm text-emerald-100">
-                {{ session('success') }}
-            </div>
-        @endif
-
-        <form method="POST" action="{{ route('password.verify') }}" class="space-y-4">
-            @csrf
-            <input type="hidden" name="email" value="{{ $email }}">
-            <div>
-                <label class="mb-2 block text-sm font-medium text-slate-200" for="otp">6 Digit OTP</label>
-                <input id="otp" name="otp" type="text" maxlength="6" required class="w-full rounded-2xl border border-white/20 bg-slate-900/60 px-4 py-3 text-center text-2xl tracking-[0.4em] text-white outline-none focus:border-cyan-400" placeholder="483291">
-            </div>
-            <button type="submit" class="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-900 transition hover:bg-cyan-300">Verify</button>
-        </form>
-
-        <div class="mt-6 text-center text-sm text-slate-300">
-            <a href="{{ route('password.request') }}" class="text-cyan-300 hover:underline">Resend OTP</a>
         </div>
     </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ asset('js/app.js') }}"></script>
 </body>
 </html>
