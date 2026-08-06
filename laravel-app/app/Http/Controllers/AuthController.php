@@ -6,20 +6,30 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
+    /**
+     * Get current authentication session.
+     */
     public function session(): JsonResponse
     {
         $user = Auth::user();
 
         return response()->json([
             'authenticated' => (bool) $user,
-            'user' => $user ? ['name' => $user->name, 'email' => $user->email] : null,
+            'user' => $user ? [
+                'name' => $user->name,
+                'email' => $user->email,
+            ] : null,
         ]);
     }
 
+    /**
+     * Register new user.
+     */
     public function register(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -29,20 +39,28 @@ class AuthController extends Controller
         ]);
 
         $user = User::create([
-            'name' => trim($data['name']),
-            'email' => strtolower(trim($data['email'])),
-            'password' => bcrypt($data['password']),
+            'name'     => trim($data['name']),
+            'email'    => strtolower(trim($data['email'])),
+            'password' => Hash::make($data['password']),
         ]);
 
         Auth::login($user);
+
         $request->session()->regenerate();
 
         return response()->json([
             'success' => true,
-            'user' => ['name' => $user->name, 'email' => $user->email],
-        ]);
+            'message' => 'Registration successful.',
+            'user' => [
+                'name'  => $user->name,
+                'email' => $user->email,
+            ],
+        ], 201);
     }
 
+    /**
+     * Login user.
+     */
     public function login(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -50,27 +68,49 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('email', strtolower(trim($data['email'])))->first();
+        $user = User::where(
+            'email',
+            strtolower(trim($data['email']))
+        )->first();
 
-        if (! $user || ! password_verify($data['password'], $user->password)) {
-            return response()->json(['error' => 'Email or password is incorrect.'], 401);
+        if (!$user || !Hash::check($data['password'], $user->password)) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Email or Password is incorrect.'
+            ], 401);
         }
 
-        Auth::login($user, true);
+        $remember = $request->boolean('remember');
+
+        Auth::login($user, $remember);
+
         $request->session()->regenerate();
 
         return response()->json([
             'success' => true,
-            'user' => ['name' => $user->name, 'email' => $user->email],
+            'message' => 'Login successful.',
+            'user' => [
+                'name' => $user->name,
+                'email' => $user->email,
+            ],
         ]);
     }
 
+    /**
+     * Logout user.
+     */
     public function logout(Request $request): JsonResponse
     {
         Auth::logout();
+
         $request->session()->invalidate();
+
         $request->session()->regenerateToken();
 
-        return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Logout successful.'
+        ]);
     }
 }

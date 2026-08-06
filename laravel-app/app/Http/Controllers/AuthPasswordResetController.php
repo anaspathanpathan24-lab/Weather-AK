@@ -51,7 +51,7 @@ class AuthPasswordResetController extends Controller
         ]);
 
         try {
-            Mail::to($email)->send(new PasswordResetOtpMail($otp, $email));
+            Mail::to($email)->queue(new PasswordResetOtpMail($otp, $email));
         } catch (\Throwable) {
             $record->delete();
 
@@ -110,7 +110,10 @@ class AuthPasswordResetController extends Controller
             return $this->jsonResponse(false, 'OTP is invalid. Please try again.', 401);
         }
 
-        $record->update(['verified' => true]);
+        $record->update([
+        'verified' => true,
+        'updated_at' => now(),
+        ]);
         $request->session()->put('password_reset.verified', true);
 
         return $this->jsonResponse(true, 'OTP verified successfully. You can now reset your password.');
@@ -165,8 +168,12 @@ class AuthPasswordResetController extends Controller
 
         $user->update(['password' => Hash::make($data['password'])]);
         $record->delete();
-        $request->session()->forget(['password_reset']);
-
+        $request->session()->forget([
+            
+        'password_reset.email',
+        'password_reset.otp_sent',
+        'password_reset.verified',
+     ]);
         return $this->jsonResponse(true, 'Password changed successfully. You can now sign in.');
     }
 

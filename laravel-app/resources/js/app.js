@@ -1,134 +1,255 @@
 import './bootstrap';
 
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '';
+const csrfToken =
+    document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 
-function getCsrfHeaders() {
-    return csrfToken ? { 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' } : { 'X-Requested-With': 'XMLHttpRequest' };
+function headers() {
+    return {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+    };
 }
 
-function setMessage(message, type = 'info') {
-    const alert = document.getElementById('form-message');
-    if (!alert) return;
+function showMessage(message, type = 'info') {
+    const box = document.getElementById('form-message');
+    if (!box) return;
 
-    alert.className = `alert alert-${type} d-block`;
-    alert.textContent = message;
+    box.className = `alert alert-${type}`;
+    box.classList.remove('d-none');
+    box.textContent = message;
 }
 
 function clearMessage() {
-    const alert = document.getElementById('form-message');
-    if (!alert) return;
+    const box = document.getElementById('form-message');
+    if (!box) return;
 
-    alert.className = 'alert d-none';
-    alert.textContent = '';
+    box.className = 'alert d-none';
+    box.textContent = '';
 }
 
-function setSubmitState(button, isLoading) {
+function loading(button, state) {
+
     if (!button) return;
 
-    button.disabled = isLoading;
-    button.innerHTML = isLoading
-        ? '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...'
-        : button.dataset.defaultText || button.textContent;
+    if (!button.dataset.text) {
+        button.dataset.text = button.innerHTML;
+    }
+
+    button.disabled = state;
+
+    button.innerHTML = state
+        ? `<span class="spinner-border spinner-border-sm me-2"></span>Processing...`
+        : button.dataset.text;
 }
 
-async function requestJson(url, body, { method = 'POST', button = null } = {}) {
-    if (button) setSubmitState(button, true);
+async function api(url, payload, button = null) {
+
+    loading(button, true);
 
     try {
+
         const response = await fetch(url, {
-            method,
-            headers: {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                ...getCsrfHeaders(),
-            },
-            body: JSON.stringify(body),
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: headers(),
+            body: JSON.stringify(payload)
         });
 
-        const data = await response.json().catch(() => ({ success: false, message: 'Unexpected server response.', errors: {} }));
+        let data = {};
 
-        if (!response.ok) {
-            const message = data.message || 'Request failed.';
-            const errorMessages = Object.values(data.errors || {}).flat();
-            throw { message: errorMessages[0] || message, errors: errorMessages };
+        try {
+            data = await response.json();
+        } catch (_) {}
+
+        switch (response.status) {
+
+            case 200:
+            case 201:
+                return data;
+
+            case 401:
+                throw new Error(data.message || "Unauthorized.");
+
+            case 403:
+                throw new Error("Access denied.");
+
+            case 404:
+                throw new Error("Requested page not found.");
+
+            case 422:
+
+                if (data.errors) {
+
+                    const first = Object.values(data.errors)[0];
+
+                    throw new Error(Array.isArray(first) ? first[0] : first);
+                }
+
+                throw new Error(data.message || "Validation failed.");
+
+            case 500:
+                throw new Error("Internal Server Error.");
+
+            default:
+                throw new Error(data.message || "Unexpected error.");
         }
 
-        return data;
+    } catch (e) {
+
+        if (e instanceof TypeError) {
+            throw new Error("Network Error. Please check your internet connection.");
+        }
+
+        throw e;
+
     } finally {
-        if (button) setSubmitState(button, false);
+
+        loading(button, false);
+
     }
+
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const forgotForm = document.getElementById('forgot-password-form');
-    const verifyForm = document.getElementById('verify-otp-form');
-    const resetForm = document.getElementById('reset-password-form');
 
-    if (forgotForm) {
-        const button = document.getElementById('submit-btn');
-        if (button) button.dataset.defaultText = button.textContent;
+    /*
+    |--------------------------------------------------------------------------
+    | Forgot Password
+    |--------------------------------------------------------------------------
+    */
 
-        forgotForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
+    const forgot = document.getElementById('forgot-password-form');
+
+    if (forgot) {
+
+        forgot.addEventListener('submit', async function (e) {
+
+            e.preventDefault();
+
             clearMessage();
-            const formData = new FormData(forgotForm);
+
+            const btn = document.getElementById('submit-btn');
+
+            const email = document.getElementById('email').value.trim();
 
             try {
-                const data = await requestJson('/forgot-password', { email: formData.get('email') }, { button });
-                setMessage(data.message, data.success ? 'success' : 'danger');
-                if (data.success) {
+
+                const result = await api('/forgot-password', {
+                    email
+                }, btn);
+
+                showMessage(result.message, 'success');
+
+                setTimeout(() => {
+
                     window.location.href = '/verify-otp';
-                }
-            } catch (error) {
-                setMessage(error.message || 'Unable to send OTP.', 'danger');
+
+                }, 800);
+
+            } catch (err) {
+
+                showMessage(err.message, 'danger');
+
             }
+
         });
+
     }
 
-    if (verifyForm) {
-        const button = document.getElementById('submit-btn');
-        if (button) button.dataset.defaultText = button.textContent;
+    /*
+    |--------------------------------------------------------------------------
+    | Verify OTP
+    |--------------------------------------------------------------------------
+    */
 
-        verifyForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
+    const verify = document.getElementById('verify-otp-form');
+
+    if (verify) {
+
+        verify.addEventListener('submit', async function (e) {
+
+            e.preventDefault();
+
             clearMessage();
-            const formData = new FormData(verifyForm);
+
+            const btn = document.getElementById('submit-btn');
 
             try {
-                const data = await requestJson('/verify-otp', { email: formData.get('email'), otp: formData.get('otp') }, { button });
-                setMessage(data.message, data.success ? 'success' : 'danger');
-                if (data.success) {
+
+                const result = await api('/verify-otp', {
+
+                    email: document.getElementById('email').value,
+
+                    otp: document.getElementById('otp').value
+
+                }, btn);
+
+                showMessage(result.message, 'success');
+
+                setTimeout(() => {
+
                     window.location.href = '/reset-password';
-                }
-            } catch (error) {
-                setMessage(error.message || 'Unable to verify OTP.', 'danger');
+
+                }, 800);
+
+            } catch (err) {
+
+                showMessage(err.message, 'danger');
+
             }
+
         });
+
     }
 
-    if (resetForm) {
-        const button = document.getElementById('submit-btn');
-        if (button) button.dataset.defaultText = button.textContent;
+    /*
+    |--------------------------------------------------------------------------
+    | Reset Password
+    |--------------------------------------------------------------------------
+    */
 
-        resetForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
+    const reset = document.getElementById('reset-password-form');
+
+    if (reset) {
+
+        reset.addEventListener('submit', async function (e) {
+
+            e.preventDefault();
+
             clearMessage();
-            const formData = new FormData(resetForm);
+
+            const btn = document.getElementById('submit-btn');
 
             try {
-                const data = await requestJson('/reset-password', {
-                    email: formData.get('email'),
-                    password: formData.get('password'),
-                    password_confirmation: formData.get('password_confirmation'),
-                }, { button });
 
-                setMessage(data.message, data.success ? 'success' : 'danger');
-                if (data.success) {
+                const result = await api('/reset-password', {
+
+                    email: document.getElementById('email').value,
+
+                    password: document.getElementById('password').value,
+
+                    password_confirmation: document.getElementById('password_confirmation').value
+
+                }, btn);
+
+                showMessage(result.message, 'success');
+
+                setTimeout(() => {
+
                     window.location.href = '/password-changed';
-                }
-            } catch (error) {
-                setMessage(error.message || 'Unable to reset password.', 'danger');
+
+                }, 800);
+
+            } catch (err) {
+
+                showMessage(err.message, 'danger');
+
             }
+
         });
+
     }
+
 });
