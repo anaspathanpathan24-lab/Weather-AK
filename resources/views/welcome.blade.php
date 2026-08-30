@@ -14,19 +14,8 @@
     <!-- Sidebar Section -->
     <aside class="w-72 bg-[#1c1c1e] text-gray-400 flex flex-col h-full border-r border-gray-800 shadow-2xl z-10 shrink-0">
         
-        <!-- Profile Section (Ab sidebar yahan se shuru hoga) -->
-        <div class="p-5 flex justify-between items-center border-b border-gray-800 mt-2">
-            <div class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-full bg-[#df6a44] text-white flex items-center justify-center font-bold text-lg">
-                    A
-                </div>
-                <span class="text-white font-medium">Anas Khan</span>
-            </div>
-            <button class="hover:text-white transition"><i class="fa-solid fa-angles-left"></i></button>
-        </div>
-
-        <!-- Navigation Links -->
-        <nav class="flex-1 overflow-y-auto py-5 px-3 space-y-1.5 scrollbar-hide">
+        <!-- Navigation Links (Profile section hata diya gaya hai, ab menu seedha yahan se shuru hoga) -->
+        <nav class="flex-1 overflow-y-auto py-5 px-3 space-y-1.5 scrollbar-hide mt-4">
             <a href="#" class="flex items-center gap-3 px-3 py-2.5 bg-[#3a2824] text-white rounded-lg transition">
                 <i class="fa-solid fa-house w-5 text-center text-[#df6a44]"></i>
                 <span class="font-medium">Home</span>
