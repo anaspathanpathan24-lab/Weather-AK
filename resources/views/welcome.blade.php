@@ -81,11 +81,9 @@
             
             <!-- Search Box with Datalist -->
             <div class="flex space-x-2 mb-6">
-                <!-- input me list="gujarat-cities" joda gaya hai -->
                 <input type="text" id="city" list="gujarat-cities" placeholder="Search Gujarat city (e.g., Ahmedabad)..." 
                     class="w-full px-5 py-3 bg-[#131521] text-white border border-[#262a40] rounded-xl focus:outline-none focus:border-blue-500 transition">
                 
-                <!-- Gujarat Cities Database -->
                 <datalist id="gujarat-cities">
                     <option value="Ahmedabad"></option>
                     <option value="Surat"></option>
@@ -101,7 +99,7 @@
                     <option value="Bharuch"></option>
                     <option value="Surendranagar"></option>
                     <option value="Porbandar"></option>
-                    <option value="Mahesana"></option>
+                    <option value="Mehsana"></option>
                     <option value="Bhuj"></option>
                     <option value="Amreli"></option>
                     <option value="Patan"></option>
@@ -142,8 +140,10 @@
                 <h2 class="text-2xl font-bold text-white" id="city-name">City Name</h2>
                 <p class="text-blue-400 font-medium capitalize mt-1" id="weather-desc">Clear Sky</p>
                 
-                <div class="my-8">
+                <div class="my-8 flex flex-col items-center">
                     <span class="text-7xl font-bold text-white tracking-tighter" id="temp">25°</span>
+                    <!-- Naya Feels Like Element -->
+                    <p class="text-gray-400 mt-2 text-sm font-medium hidden" id="feels-like-container">Feels like <span id="feels-like-temp"></span>°C</p>
                 </div>
                 
                 <div class="flex justify-between text-gray-400 mt-6 border-t border-[#262a40] pt-6 px-4">
@@ -181,6 +181,19 @@
                     document.getElementById('temp').innerText = Math.round(data.main.temp) + '°';
                     document.getElementById('humidity').innerText = data.main.humidity + '%';
                     document.getElementById('wind').innerText = data.wind.speed + ' km/h';
+
+                    // Feature 1: Feels Like Temperature Logic
+                    const feelsLikeContainer = document.getElementById('feels-like-container');
+                    const feelsLikeTemp = document.getElementById('feels-like-temp');
+                    
+                    if (data.main && data.main.feels_like !== undefined && data.main.feels_like !== null) {
+                        feelsLikeTemp.innerText = Math.round(data.main.feels_like);
+                        feelsLikeContainer.classList.remove('hidden');
+                    } else {
+                        // Gracefully hide if data is missing
+                        feelsLikeContainer.classList.add('hidden');
+                    }
+
                 } else {
                     alert("City not found! Please check the spelling.");
                 }
