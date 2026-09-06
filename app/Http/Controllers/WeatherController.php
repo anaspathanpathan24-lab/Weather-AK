@@ -9,20 +9,32 @@ class WeatherController extends Controller
 {
     public function getWeather(Request $request)
     {
-        // 1. Frontend se city ka naam lena
+        $request->validate(['city' => 'required|string']);
         $city = $request->city;
-        
-        // 2. .env file se API key nikalna
         $apiKey = env('OPENWEATHER_API_KEY');
-        
-        // 3. OpenWeatherMap API ko call karna (units=metric se temperature Celsius mein aayega)
-        $response = Http::get("https://api.openweathermap.org/data/2.5/weather?q={$city}&units=metric&appid={$apiKey}");
 
-        // 4. Data check karke wapas bhejna
-        if ($response->successful()) {
-            return response()->json($response->json());
+        // 1. Fetch Current Weather (Provides lat & lon needed for other endpoints)
+        $currentResponse = Http::get("https://api.openweathermap.org/data/2.5/weather?q={$city}&units=metric&appid={$apiKey}");
+
+        if (!$currentResponse->successful()) {
+            return response()->json(['error' => 'City not found'], 404);
         }
 
-        return response()->json(['error' => 'City not found'], 404);
+        $currentData = $currentResponse->json();
+        $lat = $currentData['coord']['lat'];
+        $lon = $currentData['coord']['lon'];
+
+        // 2. Fetch 5-Day / 3-Hour Forecast
+        $forecastResponse = Http::get("https://api.openweathermap.org/data/2.5/forecast?lat={$lat}&lon={$lon}&units=metric&appid={$apiKey}");
+
+        // 3. Fetch UV Index
+        $uvResponse = Http::get("https://api.openweathermap.org/data/2.5/uvi?lat={$lat}&lon={$lon}&appid={$apiKey}");
+
+        // Return all data beautifully packaged for the frontend
+        return response()->json([
+            'current' => $currentData,
+            'forecast' => $forecastResponse->successful() ? $forecastResponse->json() : null,
+            'uv' => $uvResponse->successful() ? $uvResponse->json() : null,
+        ]);
     }
 }
