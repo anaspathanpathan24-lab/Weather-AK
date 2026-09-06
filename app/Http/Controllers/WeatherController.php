@@ -9,28 +9,34 @@ class WeatherController extends Controller
 {
     public function getWeather(Request $request)
     {
-        $request->validate(['city' => 'required|string']);
-        $city = $request->city;
         $apiKey = env('OPENWEATHER_API_KEY');
 
-        // 1. Fetch Current Weather (Provides lat & lon needed for other endpoints)
-        $currentResponse = Http::get("https://api.openweathermap.org/data/2.5/weather?q={$city}&units=metric&appid={$apiKey}");
+        // Feature 7: Handle Latitude & Longitude from Geolocation
+        if ($request->has('lat') && $request->has('lon')) {
+            $lat = $request->lat;
+            $lon = $request->lon;
+            $currentResponse = Http::get("https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&units=metric&appid={$apiKey}");
+        } else {
+            // Standard City Search
+            $request->validate(['city' => 'required|string']);
+            $city = $request->city;
+            $currentResponse = Http::get("https://api.openweathermap.org/data/2.5/weather?q={$city}&units=metric&appid={$apiKey}");
+        }
 
         if (!$currentResponse->successful()) {
-            return response()->json(['error' => 'City not found'], 404);
+            return response()->json(['error' => 'Location not found'], 404);
         }
 
         $currentData = $currentResponse->json();
+        
+        // Extract accurate coordinates for forecast APIs
         $lat = $currentData['coord']['lat'];
         $lon = $currentData['coord']['lon'];
 
-        // 2. Fetch 5-Day / 3-Hour Forecast
+        // Fetch Extended Features Data
         $forecastResponse = Http::get("https://api.openweathermap.org/data/2.5/forecast?lat={$lat}&lon={$lon}&units=metric&appid={$apiKey}");
-
-        // 3. Fetch UV Index
         $uvResponse = Http::get("https://api.openweathermap.org/data/2.5/uvi?lat={$lat}&lon={$lon}&appid={$apiKey}");
 
-        // Return all data beautifully packaged for the frontend
         return response()->json([
             'current' => $currentData,
             'forecast' => $forecastResponse->successful() ? $forecastResponse->json() : null,
