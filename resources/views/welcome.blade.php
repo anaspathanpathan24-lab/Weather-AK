@@ -13,16 +13,19 @@
 </head>
 <body class="bg-[#131521] flex h-screen font-sans overflow-hidden text-gray-300">
 
+    <!-- Mobile overlay backdrop -->
+    <div id="mobile-sidebar-overlay" onclick="toggleMobileSidebar(true)" class="fixed inset-0 bg-black/60 z-40 hidden lg:hidden"></div>
+
     <!-- Sidebar Section (Unchanged style & elements) -->
-    <aside class="w-72 bg-[#1b1f30] text-gray-400 flex flex-col h-full border-r border-[#262a40] z-10 shrink-0 hidden lg:flex">
+    <aside id="mobile-sidebar" class="w-72 bg-[#1b1f30] text-gray-400 flex-col h-full border-r border-[#262a40] shrink-0 fixed inset-y-0 left-0 z-50 -translate-x-full transition-transform duration-300 ease-in-out flex lg:static lg:translate-x-0 lg:flex">
         <nav class="flex-1 overflow-y-auto py-6 px-4 space-y-2 scrollbar-hide">
-            <a href="#" onclick="switchTab('dashboard')" class="nav-link flex items-center gap-3 px-4 py-3 bg-blue-500 text-white rounded-xl transition shadow-lg shadow-blue-500/30" id="link-dashboard">
+            <a href="#" onclick="switchTab('dashboard'); toggleMobileSidebar(true)" class="nav-link flex items-center gap-3 px-4 py-3 bg-blue-500 text-white rounded-xl transition shadow-lg shadow-blue-500/30" id="link-dashboard">
                 <i class="fa-solid fa-house w-5 text-center"></i><span class="font-medium">Home</span>
             </a>
-            <a href="#" onclick="switchTab('map')" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-map">
+            <a href="#" onclick="switchTab('map'); toggleMobileSidebar(true)" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-map">
                 <i class="fa-solid fa-map w-5 text-center"></i><span>Gujarat Weather Map</span>
             </a>
-            <a href="#" onclick="switchTab('historical')" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-historical">
+            <a href="#" onclick="switchTab('historical'); toggleMobileSidebar(true)" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-historical">
                 <i class="fa-solid fa-chart-line w-5 text-center"></i><span>Historical Weather</span>
                 <span class="ml-auto bg-[#32364a] text-white text-[10px] px-2 py-0.5 rounded-full">New</span>
             </a>
@@ -30,7 +33,7 @@
                 <i class="fa-solid fa-triangle-exclamation w-5 text-center"></i><span>Weather alerts</span>
                 <span id="sidebar-alerts-badge" class="ml-auto bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full hidden">0</span>
             </a>
-            <a href="#" onclick="switchTab('ai')" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-ai">
+            <a href="#" onclick="switchTab('ai'); toggleMobileSidebar(true)" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-ai">
                 <i class="fa-solid fa-robot w-5 text-center"></i><span>Ask meteorologist</span>
             </a>
             <a href="#" class="flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition">
@@ -38,7 +41,7 @@
             </a>
         </nav>
         <div class="p-5 space-y-6 border-t border-[#262a40]">
-            <button onclick="switchTab('ai')" class="w-full bg-[#1b2f4f] hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-900/50 py-3 rounded-xl flex items-center justify-center gap-2 font-medium transition">
+            <button onclick="switchTab('ai'); toggleMobileSidebar(true)" class="w-full bg-[#1b2f4f] hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-900/50 py-3 rounded-xl flex items-center justify-center gap-2 font-medium transition">
                 <i class="fa-regular fa-comment"></i> Ask meteorologist
             </button>
             <div class="flex justify-between items-center cursor-pointer px-2">
@@ -54,7 +57,13 @@
 
     <!-- Main Content Container -->
     <main class="flex-1 overflow-y-auto p-4 md:p-8 relative scrollbar-hide">
-        
+
+        <div class="w-full max-w-7xl mx-auto mb-4 lg:hidden">
+            <button onclick="toggleMobileSidebar()" class="flex items-center gap-2 bg-[#1b1f30] border border-[#262a40] text-gray-200 px-4 py-2 rounded-xl">
+                <i class="fa-solid fa-bars"></i> <span>Menu</span>
+            </button>
+        </div>
+
         <div class="w-full max-w-7xl mx-auto mb-8 text-center lg:text-left flex justify-between items-center">
             <div>
                 <h1 class="text-3xl md:text-4xl font-extrabold text-white tracking-wide">Gujarat Weather Intelligence Platform</h1>
@@ -62,6 +71,7 @@
             </div>
             <div id="alert-box" class="hidden bg-orange-500/20 text-orange-400 px-4 py-2 rounded-lg border border-orange-500/50 text-sm max-w-xs"></div>
         </div>
+
 
         <!-- TAB 1: MAIN DASHBOARD VIEW -->
         <div id="tab-dashboard" class="tab-content">
@@ -88,22 +98,28 @@
                                 </button>
                             </div>
                             <p class="text-blue-400 font-medium capitalize mt-1" id="weather-desc">Clear Sky</p>
-                            
-                            <div class="my-8 flex flex-col items-center">
-                                <span class="text-7xl font-bold text-white tracking-tighter" id="temp">25°</span>
+
+                            <div class="my-6 flex flex-col items-center">
+                                <img id="weather-icon" src="https://openweathermap.org/img/wn/02d@4x.png" alt="weather icon" class="w-28 h-28 sm:w-32 sm:h-32 -mb-2 drop-shadow-lg">
+                                <span class="text-6xl sm:text-7xl font-bold text-white tracking-tighter" id="temp">25°</span>
                                 <p class="text-gray-400 mt-2 text-sm font-medium hidden" id="feels-like-container">Feels like <span id="feels-like-temp"></span>°C</p>
                             </div>
-                            
-                            <div class="flex justify-between text-gray-400 mt-6 border-t border-[#262a40] pt-6 px-4">
+
+                            <div class="grid grid-cols-3 gap-2 sm:gap-4 text-gray-400 mt-6 border-t border-[#262a40] pt-6 px-1 sm:px-4">
                                 <div class="flex flex-col items-center">
                                     <i class="fa-solid fa-droplet text-blue-500 mb-2 text-xl"></i>
-                                    <p class="text-sm font-medium">Humidity</p>
-                                    <p class="font-bold text-white mt-1" id="humidity">60%</p>
+                                    <p class="text-xs sm:text-sm font-medium">Humidity</p>
+                                    <p class="font-bold text-white mt-1 text-sm sm:text-base" id="humidity">60%</p>
                                 </div>
                                 <div class="flex flex-col items-center">
                                     <i class="fa-solid fa-wind text-gray-400 mb-2 text-xl"></i>
-                                    <p class="text-sm font-medium">Wind</p>
-                                    <p class="font-bold text-white mt-1" id="wind">5 km/h</p>
+                                    <p class="text-xs sm:text-sm font-medium">Wind</p>
+                                    <p class="font-bold text-white mt-1 text-sm sm:text-base" id="wind">5 km/h</p>
+                                </div>
+                                <div class="flex flex-col items-center">
+                                    <i class="fa-solid fa-gauge text-gray-400 mb-2 text-xl"></i>
+                                    <p class="text-xs sm:text-sm font-medium">Pressure</p>
+                                    <p class="font-bold text-white mt-1 text-sm sm:text-base" id="pressure">1013 hPa</p>
                                 </div>
                             </div>
                         </div>
@@ -346,6 +362,22 @@
         });
 
         // Tab Navigation Controller
+        function toggleMobileSidebar(forceClose) {
+            const sidebar = document.getElementById('mobile-sidebar');
+            const overlay = document.getElementById('mobile-sidebar-overlay');
+            const isOpen = sidebar.classList.contains('translate-x-0');
+
+            if (forceClose || isOpen) {
+                sidebar.classList.remove('translate-x-0');
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+            } else {
+                sidebar.classList.remove('-translate-x-full');
+                sidebar.classList.add('translate-x-0');
+                overlay.classList.remove('hidden');
+            }
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-link').forEach(el => {
@@ -367,6 +399,7 @@
         document.getElementById('sidebar-alerts-btn').addEventListener('click', (e) => {
             e.preventDefault();
             switchTab('dashboard');
+            toggleMobileSidebar(true);
             setTimeout(() => {
                 const alertsSec = document.getElementById('alerts-section');
                 if(alertsSec) alertsSec.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -397,6 +430,12 @@
             document.getElementById('temp').innerText = Math.round(current.main.temp) + '°';
             document.getElementById('humidity').innerText = current.main.humidity + '%';
             document.getElementById('wind').innerText = current.wind.speed + ' km/h';
+            document.getElementById('pressure').innerText = (current.main.pressure ?? '--') + ' hPa';
+
+            if (current.weather[0].icon) {
+                document.getElementById('weather-icon').src = `https://openweathermap.org/img/wn/${current.weather[0].icon}@4x.png`;
+                document.getElementById('weather-icon').alt = current.weather[0].description;
+            }
 
             const feelsLikeContainer = document.getElementById('feels-like-container');
             if (current.main.feels_like) {
