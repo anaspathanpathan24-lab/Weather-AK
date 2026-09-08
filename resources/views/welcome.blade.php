@@ -768,66 +768,7 @@
         // Favorites & Explorer Event bindings
         document.getElementById('favorite-btn').addEventListener('click', () => {
             if(!currentActiveCity) return;
-            let favs = getFavorites();async function sendAiMessage() {
-            const input = document.getElementById('ai-input');
-            const prompt = input.value.trim();
-            if(!prompt) return;
-
-            const chatContainer = document.getElementById('chat-messages');
-            
-            // Append User Bubble
-            chatContainer.innerHTML += `
-                <div class="flex items-start gap-3 justify-end">
-                    <div class="bg-blue-600 text-white p-4 rounded-2xl text-sm max-w-lg leading-relaxed">${prompt}</div>
-                    <div class="w-8 h-8 rounded-full bg-gray-700 text-white flex items-center justify-center shrink-0 text-xs font-bold">You</div>
-                </div>
-            `;
-            input.value = '';
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            // Append loading indicator bubble
-            const loadingId = 'ai-load-' + Date.now();
-            chatContainer.innerHTML += `
-                <div id="${loadingId}" class="flex items-start gap-3">
-                    <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">AI</div>
-                    <div class="bg-[#131521] border border-[#262a40] p-4 rounded-2xl text-sm text-gray-400 italic">Consulting Gujarat climate models...</div>
-                </div>
-            `;
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            try {
-                const response = await fetch('/api/meteorologist', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
-                    },
-                    body: JSON.stringify({ prompt: prompt, context: liveDashboardCache[currentActiveCity] || {} })
-                });
-                const resJson = await response.json();
-                
-                document.getElementById(loadingId).remove();
-
-                chatContainer.innerHTML += `
-                    <div class="flex items-start gap-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">AI</div>
-                        <div class="bg-[#131521] border border-[#262a40] p-4 rounded-2xl text-sm text-gray-200 max-w-lg leading-relaxed">${resJson.reply}</div>
-                    </div>
-                `;
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            } catch(e) {
-                document.getElementById(loadingId).remove();
-                chatContainer.innerHTML += `
-                    <div class="flex items-start gap-3">
-                        <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">AI</div>
-                        <div class="bg-[#131521] border border-red-500/30 p-4 rounded-2xl text-sm text-red-400">Connection error connecting to AI backend.</div>
-                    </div>
-                `;
-            }
-        }
-
-        // Favorites & Explorer Event bindings
+            let favs = getFavorites();
             if (favs.includes(currentActiveCity)) favs = favs.filter(c => c !== currentActiveCity);
             else favs.push(currentActiveCity);
             localStorage.setItem('gujarat_weather_favorites', JSON.stringify(favs));

@@ -57,31 +57,42 @@ class WeatherController extends Controller
     public function askMeteorologist(Request $request)
     {
         $prompt = $request->prompt ?? '';
-        $aiApiKey = env('GEMINI_API_KEY') ?? env('AI_API_KEY');
+        $aiApiKey = env('GROQ_API_KEY');
 
         $reply = "Namaste! Based on current Gujarat climate data, conditions are pleasant around 28°C–32°C. Let me know if you need specific district details!";
 
         if ($aiApiKey) {
             try {
-                $aiResponse = Http::timeout(6)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={$aiApiKey}", [
-                    'contents' => [
-                        [
-                            'parts' => [
-                                ['text' => "You are a professional Gujarat Weather Assistant. Answer concisely: " . $prompt]
-                            ]
-                        ]
-                    ]
-                ]);
+                $aiResponse = Http::timeout(10)
+                    ->withToken($aiApiKey)
+                    ->post("https://api.groq.com/openai/v1/chat/completions", [
+                        'model' => 'openai/gpt-oss-120b',
+                        'messages' => [
+                            [
+                                'role' => 'system',
+                                'content' => 'You are a professional Gujarat Weather Assistant. Answer concisely, supporting English, Gujarati and Hinglish.',
+                            ],
+                            [
+                                'role' => 'user',
+                                'content' => $prompt,
+                            ],
+                        ],
+                    ]);
 
                 if ($aiResponse->successful()) {
                     $responseData = $aiResponse->json();
-                    $geminiText = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? null;
-                    if ($geminiText) {
-                        $reply = $geminiText;
+                    $groqText = $responseData['choices'][0]['message']['content'] ?? null;
+                    if ($groqText) {
+                        $reply = $groqText;
                     }
+                } else {
+                    \Illuminate\Support\Facades\Log::error('Groq API call failed', [
+                        'status' => $aiResponse->status(),
+                        'body' => $aiResponse->body(),
+                    ]);
                 }
             } catch (\Exception $e) {
-                // Fallback handles gracefully
+                \Illuminate\Support\Facades\Log::error('Groq API exception: ' . $e->getMessage());
             }
         }
 
