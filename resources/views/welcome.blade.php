@@ -908,6 +908,13 @@
             box.classList.remove('hidden');
             if(isError) setTimeout(() => box.classList.add('hidden'), 5000);
         }
+        async function sendQuickPrompt(query) {
+            const inputField = document.getElementById('ai-input');
+            if (inputField) {
+                inputField.value = query;
+                await sendAiMessage();
+            }
+        }
     </script>
 </body>
 </html>
