@@ -98,4 +98,34 @@ class WeatherController extends Controller
 
         return response()->json(['reply' => $reply]);
     }
+
+    // In your WeatherController.php
+public function index(Request $request)
+{
+    try {
+        // Your existing API call here (e.g., fetching from OpenWeather or WeatherAPI)
+        // $weatherData = Http::get("YOUR_API_URL")->json();
+
+        // Map the API response to a standard array format for the view
+        $forecasts = [];
+        if (isset($weatherData['forecast']['forecastday'])) {
+            foreach ($weatherData['forecast']['forecastday'] as $day) {
+                $forecasts[] = [
+                    'date' => \Carbon\Carbon::parse($day['date'])->format('D, M d'),
+                    'icon' => $day['day']['condition']['icon'],
+                    'condition' => $day['day']['condition']['text'],
+                    'max_temp' => round($day['day']['maxtemp_c']),
+                    'min_temp' => round($day['day']['mintemp_c']),
+                    'details' => $day['day'] // Store extra data for the click event
+                ];
+            }
+        }
+
+        return view('home', compact('forecasts'));
+
+    } catch (\Exception $e) {
+        // Graceful error state handling
+        return view('home')->with('error', 'Unable to load 7-day forecast at this time.');
+    }
+}
 }
