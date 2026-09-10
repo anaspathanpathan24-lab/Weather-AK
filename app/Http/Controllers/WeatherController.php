@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class WeatherController extends Controller
 {
@@ -34,24 +37,220 @@ class WeatherController extends Controller
             return response()->json([
                 'current' => $currentData,
                 'forecast' => $forecastResponse->successful() ? $forecastResponse->json() : null,
-                'uv' => ['value' => 6], // Safe fallback to prevent UV endpoint failure
+                'uv' => ['value' => 6],
             ]);
         } catch (\Exception $e) {
+            Log::error('Weather API exception: ' . $e->getMessage());
+
             return response()->json(['error' => 'Server error occurred.'], 500);
         }
     }
 
+    /**
+     * Return real historical weather statistics for a Gujarat district.
+     *
+     * The location is resolved through Open-Meteo Geocoding and the
+     * historical values are retrieved from Open-Meteo's archive API.
+     */
     public function getHistorical(Request $request)
     {
-        return response()->json([
-            'location' => $request->city ?? 'Mahesana',
-            'avg_temp' => 31.2,
-            'max_temp' => 36.5,
-            'min_temp' => 25.0,
-            'total_rainfall' => 124.5,
-            'avg_humidity' => 68,
-            'avg_wind' => 9.4
+        $validated = $request->validate([
+            'city' => ['required', 'string', 'max:100'],
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
         ]);
+
+        try {
+            $city = trim($validated['city']);
+            $from = Carbon::createFromFormat('Y-m-d', $validated['from'])->startOfDay();
+            $to = Carbon::createFromFormat('Y-m-d', $validated['to'])->startOfDay();
+
+            // Historical Weather is meant for completed/past dates.
+            $latestCompletedDate = Carbon::yesterday()->startOfDay();
+            $earliestSupportedDate = Carbon::create(1940, 1, 1)->startOfDay();
+
+            if ($from->lt($earliestSupportedDate)) {
+                return response()->json([
+                    'error' => 'Historical data is available from 01-01-1940 onward.',
+                ], 422);
+            }
+
+            if ($to->gt($latestCompletedDate)) {
+                return response()->json([
+                    'error' => 'Please select a To Date up to yesterday for historical analysis.',
+                ], 422);
+            }
+
+            // Resolve district/city to Gujarat coordinates.
+            $locationCacheKey = 'historical_location:' . strtolower($city);
+
+            $location = Cache::remember($locationCacheKey, now()->addDay(), function () use ($city) {
+                $response = Http::timeout(10)->get(
+                    'https://geocoding-api.open-meteo.com/v1/search',
+                    [
+                        'name' => $city . ', Gujarat',
+                        'count' => 10,
+                        'language' => 'en',
+                        'format' => 'json',
+                        'countryCode' => 'IN',
+                    ]
+                );
+
+                if (!$response->successful()) {
+                    return null;
+                }
+
+                $results = $response->json('results', []);
+
+                foreach ($results as $result) {
+                    $countryCode = strtoupper((string) ($result['country_code'] ?? ''));
+                    $admin1 = strtolower(trim((string) ($result['admin1'] ?? '')));
+
+                    if ($countryCode === 'IN' && $admin1 === 'gujarat') {
+                        return [
+                            'name' => $result['name'] ?? $city,
+                            'latitude' => $result['latitude'] ?? null,
+                            'longitude' => $result['longitude'] ?? null,
+                            'timezone' => $result['timezone'] ?? 'Asia/Kolkata',
+                        ];
+                    }
+                }
+
+                return null;
+            });
+
+            if (!$location || !isset($location['latitude'], $location['longitude'])) {
+                return response()->json([
+                    'error' => "Could not find a Gujarat location for '{$city}'. Please select a valid Gujarat district.",
+                ], 404);
+            }
+
+            $cacheKey = sprintf(
+                'historical_weather:%s:%s:%s',
+                strtolower($city),
+                $from->toDateString(),
+                $to->toDateString()
+            );
+
+            $historical = Cache::remember($cacheKey, now()->addHour(), function () use ($location, $from, $to) {
+                $response = Http::timeout(20)->get(
+                    'https://archive-api.open-meteo.com/v1/archive',
+                    [
+                        'latitude' => $location['latitude'],
+                        'longitude' => $location['longitude'],
+                        'start_date' => $from->toDateString(),
+                        'end_date' => $to->toDateString(),
+                        'daily' => implode(',', [
+                            'temperature_2m_mean',
+                            'temperature_2m_max',
+                            'temperature_2m_min',
+                            'precipitation_sum',
+                            'relative_humidity_2m_mean',
+                            'wind_speed_10m_mean',
+                        ]),
+                        'temperature_unit' => 'celsius',
+                        'wind_speed_unit' => 'kmh',
+                        'precipitation_unit' => 'mm',
+                        'timezone' => 'Asia/Kolkata',
+                    ]
+                );
+
+                if (!$response->successful()) {
+                    Log::error('Open-Meteo historical request failed', [
+                        'status' => $response->status(),
+                        'body' => $response->body(),
+                    ]);
+
+                    throw new \RuntimeException('Historical weather provider request failed.');
+                }
+
+                return $response->json();
+            });
+
+            $daily = $historical['daily'] ?? null;
+
+            if (!$daily || empty($daily['time'])) {
+                return response()->json([
+                    'error' => 'No historical weather data was returned for the selected date range.',
+                ], 404);
+            }
+
+            $means = $this->cleanNumericSeries($daily['temperature_2m_mean'] ?? []);
+            $maxima = $this->cleanNumericSeries($daily['temperature_2m_max'] ?? []);
+            $minima = $this->cleanNumericSeries($daily['temperature_2m_min'] ?? []);
+            $rain = $this->cleanNumericSeries($daily['precipitation_sum'] ?? []);
+            $humidity = $this->cleanNumericSeries($daily['relative_humidity_2m_mean'] ?? []);
+            $wind = $this->cleanNumericSeries($daily['wind_speed_10m_mean'] ?? []);
+
+            if (empty($means) || empty($maxima) || empty($minima)) {
+                return response()->json([
+                    'error' => 'Historical temperature data is unavailable for the selected date range.',
+                ], 404);
+            }
+
+            $dayCount = count($daily['time']);
+
+            $dailyRecords = [];
+
+            for ($i = 0; $i < $dayCount; $i++) {
+                $dailyRecords[] = [
+                    'date' => $daily['time'][$i] ?? null,
+                    'avg_temp' => isset($daily['temperature_2m_mean'][$i])
+                        ? round((float) $daily['temperature_2m_mean'][$i], 1)
+                        : null,
+                    'max_temp' => isset($daily['temperature_2m_max'][$i])
+                        ? round((float) $daily['temperature_2m_max'][$i], 1)
+                        : null,
+                    'min_temp' => isset($daily['temperature_2m_min'][$i])
+                        ? round((float) $daily['temperature_2m_min'][$i], 1)
+                        : null,
+                    'rainfall' => isset($daily['precipitation_sum'][$i])
+                        ? round((float) $daily['precipitation_sum'][$i], 1)
+                        : null,
+                    'humidity' => isset($daily['relative_humidity_2m_mean'][$i])
+                        ? round((float) $daily['relative_humidity_2m_mean'][$i], 1)
+                        : null,
+                    'wind' => isset($daily['wind_speed_10m_mean'][$i])
+                        ? round((float) $daily['wind_speed_10m_mean'][$i], 1)
+                        : null,
+                ];
+            }
+
+            return response()->json([
+                'location' => $location['name'] ?? $city,
+                'latitude' => $location['latitude'],
+                'longitude' => $location['longitude'],
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                'days' => $dayCount,
+                'avg_temp' => round(array_sum($means) / count($means), 1),
+                'max_temp' => round(max($maxima), 1),
+                'min_temp' => round(min($minima), 1),
+                'total_rainfall' => round(array_sum($rain), 1),
+                'avg_humidity' => round(array_sum($humidity) / max(count($humidity), 1), 1),
+                'avg_wind' => round(array_sum($wind) / max(count($wind), 1), 1),
+                'daily' => $dailyRecords,
+                'source' => 'Open-Meteo Historical Weather API',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Historical weather exception', [
+                'message' => $e->getMessage(),
+                'city' => $request->input('city'),
+                'from' => $request->input('from'),
+                'to' => $request->input('to'),
+            ]);
+
+            return response()->json([
+                'error' => 'Unable to fetch historical weather data right now. Please try again.',
+            ], 502);
+        }
+    }
+
+    private function cleanNumericSeries(array $values): array
+    {
+        return array_values(array_filter($values, static function ($value) {
+            return is_numeric($value);
+        }));
     }
 
     public function askMeteorologist(Request $request)
@@ -86,46 +285,16 @@ class WeatherController extends Controller
                         $reply = $groqText;
                     }
                 } else {
-                    \Illuminate\Support\Facades\Log::error('Groq API call failed', [
+                    Log::error('Groq API call failed', [
                         'status' => $aiResponse->status(),
                         'body' => $aiResponse->body(),
                     ]);
                 }
             } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::error('Groq API exception: ' . $e->getMessage());
+                Log::error('Groq API exception: ' . $e->getMessage());
             }
         }
 
         return response()->json(['reply' => $reply]);
     }
-
-    // In your WeatherController.php
-public function index(Request $request)
-{
-    try {
-        // Your existing API call here (e.g., fetching from OpenWeather or WeatherAPI)
-        // $weatherData = Http::get("YOUR_API_URL")->json();
-
-        // Map the API response to a standard array format for the view
-        $forecasts = [];
-        if (isset($weatherData['forecast']['forecastday'])) {
-            foreach ($weatherData['forecast']['forecastday'] as $day) {
-                $forecasts[] = [
-                    'date' => \Carbon\Carbon::parse($day['date'])->format('D, M d'),
-                    'icon' => $day['day']['condition']['icon'],
-                    'condition' => $day['day']['condition']['text'],
-                    'max_temp' => round($day['day']['maxtemp_c']),
-                    'min_temp' => round($day['day']['mintemp_c']),
-                    'details' => $day['day'] // Store extra data for the click event
-                ];
-            }
-        }
-
-        return view('home', compact('forecasts'));
-
-    } catch (\Exception $e) {
-        // Graceful error state handling
-        return view('home')->with('error', 'Unable to load 7-day forecast at this time.');
-    }
-}
 }

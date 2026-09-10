@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Gujarat Weather Intelligence Platform - AK</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -179,36 +180,217 @@
         </div>
 
         <!-- TAB 3: HISTORICAL VIEW -->
-        <div id="tab-historical" class="tab-content hidden">
-            <div class="w-full max-w-7xl mx-auto bg-[#1b1f30] p-8 rounded-3xl border border-[#262a40] shadow-xl">
-                <h2 class="text-2xl font-bold text-white mb-2">Historical Weather Analytics</h2>
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-[#131521] p-6 rounded-2xl border border-[#262a40]">
-                    <div>
-                        <label class="block text-xs text-gray-400 mb-2">Select District</label>
-                        <select id="hist-city" class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-2.5 rounded-xl text-sm"></select>
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-400 mb-2">From Date</label>
-                        <input type="date" id="hist-from" value="2026-08-01" class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-2 rounded-xl text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-400 mb-2">To Date</label>
-                        <input type="date" id="hist-to" value="2026-08-31" class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-2 rounded-xl text-sm">
-                    </div>
-                    <div class="flex items-end">
-                        <button onclick="fetchHistoricalData()" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 rounded-xl transition shadow-lg text-sm">Analyze</button>
-                    </div>
-                </div>
-                <div id="historical-results" class="hidden flex flex-col gap-6">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]"><span class="text-xs text-gray-400">Avg Temp</span><h4 class="text-2xl font-bold text-white mt-1" id="hist-avg">--</h4></div>
-                        <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]"><span class="text-xs text-gray-400">Max / Min</span><h4 class="text-2xl font-bold text-white mt-1"><span id="hist-max">--</span> / <span id="hist-min">--</span></h4></div>
-                        <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]"><span class="text-xs text-gray-400">Rainfall</span><h4 class="text-2xl font-bold text-white mt-1" id="hist-rain">--</h4></div>
-                        <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]"><span class="text-xs text-gray-400">Humidity</span><h4 class="text-2xl font-bold text-white mt-1" id="hist-humidity">--</h4></div>
-                    </div>
-                </div>
+<div id="tab-historical" class="tab-content hidden">
+
+    <div class="w-full max-w-7xl mx-auto bg-[#1b1f30] p-8 rounded-3xl border border-[#262a40] shadow-xl">
+
+        <h2 class="text-2xl font-bold text-white mb-2">
+            Historical Weather Analytics
+        </h2>
+
+        <p class="text-sm text-gray-400 mb-6">
+            Select a Gujarat district and date range to analyze historical weather data.
+        </p>
+
+        <!-- Filters -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-[#131521] p-6 rounded-2xl border border-[#262a40]">
+
+            <!-- District -->
+            <div>
+                <label
+                    for="hist-city"
+                    class="block text-xs text-gray-400 mb-2"
+                >
+                    Select District
+                </label>
+
+                <select
+                    id="hist-city"
+                    name="hist-city"
+                    autocomplete="off"
+                    class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                >
+                    <option value="" selected disabled>
+                        Select District
+                    </option>
+                </select>
             </div>
+
+            <!-- From Date -->
+            <div>
+                <label
+                    for="hist-from"
+                    class="block text-xs text-gray-400 mb-2"
+                >
+                    From Date
+                </label>
+
+                <input
+                    type="date"
+                    id="hist-from"
+                    name="hist-from"
+                    autocomplete="off"
+                    class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                >
+            </div>
+
+            <!-- To Date -->
+            <div>
+                <label
+                    for="hist-to"
+                    class="block text-xs text-gray-400 mb-2"
+                >
+                    To Date
+                </label>
+
+                <input
+                    type="date"
+                    id="hist-to"
+                    name="hist-to"
+                    autocomplete="off"
+                    class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-2.5 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                >
+            </div>
+
+            <!-- Analyze -->
+            <div class="flex items-end">
+
+                <button
+                    id="historical-analyze-btn"
+                    type="button"
+                    onclick="fetchHistoricalData()"
+                    class="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-xl transition shadow-lg text-sm"
+                >
+                    <i class="fa-solid fa-chart-line mr-2"></i>
+                    <span id="historical-analyze-text">
+                        Analyze
+                    </span>
+                </button>
+
+            </div>
+
         </div>
+
+        <!-- Validation / Error / Loading Message -->
+        <div
+            id="historical-status"
+            class="hidden mb-6 p-4 rounded-xl text-sm border"
+        ></div>
+
+        <!-- Results -->
+        <div
+            id="historical-results"
+            class="hidden flex flex-col gap-6"
+        >
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+                <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]">
+                    <span class="text-xs text-gray-400">
+                        Avg Temp
+                    </span>
+
+                    <h4
+                        class="text-2xl font-bold text-white mt-1"
+                        id="hist-avg"
+                    >
+                        --
+                    </h4>
+                </div>
+
+                <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]">
+
+                    <span class="text-xs text-gray-400">
+                        Max / Min
+                    </span>
+
+                    <h4 class="text-2xl font-bold text-white mt-1">
+
+                        <span id="hist-max">
+                            --
+                        </span>
+
+                        /
+
+                        <span id="hist-min">
+                            --
+                        </span>
+
+                    </h4>
+
+                </div>
+
+                <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]">
+
+                    <span class="text-xs text-gray-400">
+                        Rainfall
+                    </span>
+
+                    <h4
+                        class="text-2xl font-bold text-white mt-1"
+                        id="hist-rain"
+                    >
+                        --
+                    </h4>
+
+                </div>
+
+                <div class="bg-[#131521] p-4 rounded-2xl border border-[#262a40]">
+
+                    <span class="text-xs text-gray-400">
+                        Humidity
+                    </span>
+
+                    <h4
+                        class="text-2xl font-bold text-white mt-1"
+                        id="hist-humidity"
+                    >
+                        --
+                    </h4>
+
+                </div>
+
+            </div>
+
+            <!-- Analysis Information -->
+            <div
+                class="bg-[#131521] p-5 rounded-2xl border border-[#262a40]"
+            >
+
+                <div class="flex flex-wrap items-center justify-between gap-3">
+
+                    <div>
+
+                        <h3 class="text-white font-semibold">
+                            Analysis Summary
+                        </h3>
+
+                        <p
+                            id="historical-summary"
+                            class="text-sm text-gray-400 mt-1"
+                        >
+                            --
+                        </p>
+
+                    </div>
+
+                    <div
+                        id="historical-last-updated"
+                        class="text-xs text-gray-500"
+                    >
+                        --
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
 
         <!-- TAB 4: AI ASSISTANT VIEW -->
         <div id="tab-ai" class="tab-content hidden">
@@ -253,6 +435,20 @@
     </div>
 
     <!-- External JavaScript Link -->
-    <script src="{{ asset('js/weather-app.js') }}"></script>
+    <script src="{{ asset('js/weather-app.js') }}?v={{ filemtime(public_path('js/weather-app.js')) }}"></script>
+
+    <script>
+        // Keep Historical Analysis filters empty on a fresh page load.
+        // This prevents the browser from restoring previous form values.
+        window.addEventListener('pageshow', function () {
+            const histCity = document.getElementById('hist-city');
+            const histFrom = document.getElementById('hist-from');
+            const histTo = document.getElementById('hist-to');
+
+            if (histCity) histCity.selectedIndex = 0;
+            if (histFrom) histFrom.value = '';
+            if (histTo) histTo.value = '';
+        });
+    </script>
 </body>
 </html>

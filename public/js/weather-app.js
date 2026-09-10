@@ -1,0 +1,1835 @@
+const gujaratDistricts = [
+    "Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha", "Bharuch", "Bhavnagar", 
+    "Botad", "Chhota Udepur", "Dahod", "Dang", "Devbhumi Dwarka", "Gandhinagar", 
+    "Gir Somnath", "Jamnagar", "Junagadh", "Kheda", "Kutch", "Mahisagar", "Mahesana", 
+    "Morbi", "Narmada", "Navsari", "Panchmahal", "Patan", "Porbandar", "Rajkot", 
+    "Sabarkantha", "Surat", "Surendranagar", "Tapi", "Vadodara", "Valsad"
+];
+
+let currentActiveCity = "";
+let liveDashboardCache = {};
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderDistrictsGrid(gujaratDistricts);
+    renderFavorites();
+    populateHistoricalDropdowns();
+    initInteractiveMap();
+    fetchWeatherData('/api/weather?city=Mahesana');
+});
+
+function toggleMobileSidebar(forceClose) {
+    const sidebar = document.getElementById('mobile-sidebar');
+    const overlay = document.getElementById('mobile-sidebar-overlay');
+    const isOpen = sidebar.classList.contains('translate-x-0');
+
+    if (forceClose || isOpen) {
+        sidebar.classList.remove('translate-x-0');
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+    } else {
+        sidebar.classList.remove('-translate-x-full');
+        sidebar.classList.add('translate-x-0');
+        overlay.classList.remove('hidden');
+    }
+}
+
+function switchTab(tabName) {
+
+    document.querySelectorAll('.tab-content').forEach(el => {
+        el.classList.add('hidden');
+    });
+
+    document.querySelectorAll('.nav-link').forEach(el => {
+        el.classList.remove(
+            'bg-blue-500',
+            'text-white',
+            'shadow-lg',
+            'shadow-blue-500/30'
+        );
+    });
+
+    const targetTab =
+        document.getElementById(`tab-${tabName}`);
+
+    if (targetTab) {
+        targetTab.classList.remove('hidden');
+    }
+
+    if (
+        tabName !== 'map' &&
+        tabName !== 'historical' &&
+        tabName !== 'ai'
+    ) {
+
+        document
+            .getElementById('link-dashboard')
+            ?.classList.add(
+                'bg-blue-500',
+                'text-white',
+                'shadow-lg',
+                'shadow-blue-500/30'
+            );
+
+    } else {
+
+        document
+            .getElementById(`link-${tabName}`)
+            ?.classList.add(
+                'bg-blue-500',
+                'text-white',
+                'shadow-lg',
+                'shadow-blue-500/30'
+            );
+    }
+
+    /*
+     * IMPORTANT:
+     * Historical API is NOT called automatically.
+     * User must select district + dates and click Analyze.
+     */
+}
+
+async function fetchWeatherData(queryUrl) {
+    showAlert('');
+
+    try {
+        const response = await fetch(queryUrl);
+        const contentType = response.headers.get("content-type");
+
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            const data = await response.json();
+
+            if (!response.ok) {
+                showAlert(data.error || "Location not found!");
+                return;
+            }
+
+            updateDashboardUI(data);
+        } else {
+            showAlert("Server error. Please check your backend.");
+        }
+    } catch (error) {
+        console.error(error);
+        showAlert("Network error. Please try again.");
+    }
+}
+
+function updateDashboardUI(data) {
+    const current = data.current ? data.current : data;
+
+    currentActiveCity = current.name;
+    liveDashboardCache[current.name] = data;
+
+    document.getElementById('city-name').innerText = current.name;
+    document.getElementById('weather-desc').innerText = current.weather[0].description;
+    document.getElementById('temp').innerText = Math.round(current.main.temp) + '°';
+    document.getElementById('humidity').innerText = current.main.humidity + '%';
+    document.getElementById('wind').innerText = current.wind.speed + ' km/h';
+    document.getElementById('pressure').innerText = (current.main.pressure ?? '--') + ' hPa';
+
+    if (current.weather[0].icon) {
+        document.getElementById('weather-icon').src =
+            `https://openweathermap.org/img/wn/${current.weather[0].icon}@4x.png`;
+
+        document.getElementById('weather-icon').alt =
+            current.weather[0].description;
+    }
+
+    const feelsLikeContainer = document.getElementById('feels-like-container');
+
+    if (current.main.feels_like) {
+        document.getElementById('feels-like-temp').innerText =
+            Math.round(current.main.feels_like);
+
+        feelsLikeContainer.classList.remove('hidden');
+    } else {
+        feelsLikeContainer.classList.add('hidden');
+    }
+
+    document.getElementById('favorite-btn').classList.remove('hidden');
+    updateFavoriteStarUI();
+
+    if (!data.forecast) return;
+
+    document.getElementById('extended-features').classList.replace('hidden', 'flex');
+
+    const forecastList = data.forecast.list;
+
+    const hourlyContainer = document.getElementById('hourly-container');
+    const rainContainer = document.getElementById('rain-container');
+
+    hourlyContainer.innerHTML = '';
+    rainContainer.innerHTML = '';
+
+    forecastList.slice(0, 6).forEach(item => {
+        const date = new Date(item.dt * 1000);
+
+        const timeStr = date.toLocaleTimeString([], {
+            hour: 'numeric',
+            hour12: true
+        });
+
+        const iconUrl =
+            `https://openweathermap.org/img/wn/${item.weather[0].icon}.png`;
+
+        const temp = Math.round(item.main.temp);
+        const pop = Math.round((item.pop || 0) * 100);
+
+        hourlyContainer.innerHTML += `
+            <div class="flex flex-col items-center min-w-[60px] snap-center">
+                <span class="text-xs text-gray-400 mb-2">${timeStr}</span>
+                <img src="${iconUrl}" alt="icon" class="w-8 h-8">
+                <span class="font-semibold text-white mt-2">${temp}°C</span>
+            </div>
+        `;
+
+        rainContainer.innerHTML += `
+            <div class="flex flex-col items-center min-w-[60px] snap-center">
+                <span class="text-xs text-gray-400 mb-2">${timeStr}</span>
+                <i class="fa-solid fa-cloud-rain text-blue-400 my-2"></i>
+                <span class="font-semibold text-white">${pop}%</span>
+            </div>
+        `;
+    });
+
+    const dailyContainer = document.getElementById('daily-container');
+
+    dailyContainer.innerHTML = '';
+
+    const dailyData = {};
+
+    forecastList.forEach(item => {
+        const dateStr = item.dt_txt.split(' ')[0];
+
+        if (!dailyData[dateStr]) {
+            dailyData[dateStr] = {
+                min: item.main.temp_min,
+                max: item.main.temp_max,
+                icon: item.weather[0].icon,
+                dt: item.dt,
+                desc: item.weather[0].description,
+                humidity: item.main.humidity,
+                wind: item.wind.speed
+            };
+        } else {
+            if (item.main.temp_min < dailyData[dateStr].min) {
+                dailyData[dateStr].min = item.main.temp_min;
+            }
+
+            if (item.main.temp_max > dailyData[dateStr].max) {
+                dailyData[dateStr].max = item.main.temp_max;
+            }
+
+            if (item.dt_txt.includes("12:00:00")) {
+                dailyData[dateStr].icon = item.weather[0].icon;
+                dailyData[dateStr].desc = item.weather[0].description;
+                dailyData[dateStr].humidity = item.main.humidity;
+                dailyData[dateStr].wind = item.wind.speed;
+            }
+        }
+    });
+
+    const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+
+    Object.keys(dailyData).slice(0, 7).forEach(date => {
+        const dayObj = dailyData[date];
+
+        const dayName =
+            dayNames[new Date(dayObj.dt * 1000).getDay()];
+
+        const dateFormatted =
+            new Date(dayObj.dt * 1000).toLocaleDateString('en-GB', {
+                day: '2-digit',
+                month: 'short'
+            });
+
+        const safeData = JSON.stringify({
+            date: `${dayName}, ${dateFormatted}`,
+            desc: dayObj.desc,
+            icon: dayObj.icon,
+            max: Math.round(dayObj.max),
+            min: Math.round(dayObj.min),
+            humidity: dayObj.humidity,
+            wind: dayObj.wind
+        }).replace(/"/g, '&quot;');
+
+        dailyContainer.innerHTML += `
+            <div onclick="showForecastDetails('${safeData}')"
+                 class="flex items-center justify-between p-3 rounded-2xl hover:bg-[#262a40] cursor-pointer transition border border-transparent hover:border-[#32364a] mb-1">
+
+                <div class="flex flex-col w-20">
+                    <span class="text-sm font-bold text-gray-200">${dayName}</span>
+                    <span class="text-xs text-gray-500">${dateFormatted}</span>
+                </div>
+
+                <div class="flex items-center gap-3 flex-1">
+                    <img src="https://openweathermap.org/img/wn/${dayObj.icon}.png"
+                         class="w-8 h-8">
+
+                    <span class="text-xs text-blue-100 capitalize hidden sm:block truncate">
+                        ${dayObj.desc}
+                    </span>
+                </div>
+
+                <div class="flex gap-3 justify-end w-20">
+                    <span class="text-sm font-bold text-white">
+                        ${Math.round(dayObj.max)}°
+                    </span>
+
+                    <span class="text-sm font-medium text-gray-500">
+                        ${Math.round(dayObj.min)}°
+                    </span>
+                </div>
+            </div>
+        `;
+    });
+
+    const uvContainer = document.getElementById('uv-container');
+
+    let uviVal = 0;
+
+    if (data.uv && data.uv.value !== undefined) {
+        uviVal = Math.round(data.uv.value);
+
+        let category = 'Low';
+        let msg = 'Minimal sun protection needed.';
+        let color = 'text-green-400';
+
+        if (uviVal >= 11) {
+            category = 'Extreme';
+            msg = 'Avoid prolonged outdoor exposure.';
+            color = 'text-purple-400';
+        }
+        else if (uviVal >= 8) {
+            category = 'Very High';
+            msg = 'Extra protection is recommended.';
+            color = 'text-red-400';
+        }
+        else if (uviVal >= 6) {
+            category = 'High';
+            msg = 'Use sunscreen and seek shade.';
+            color = 'text-orange-400';
+        }
+        else if (uviVal >= 3) {
+            category = 'Moderate';
+            msg = 'Consider wearing sunglasses.';
+            color = 'text-yellow-400';
+        }
+
+        uvContainer.innerHTML = `
+            <div class="flex items-end gap-3 mb-2">
+                <span class="text-5xl font-bold text-white">${uviVal}</span>
+                <span class="text-lg font-semibold ${color} mb-1">${category}</span>
+            </div>
+
+            <p class="text-xs text-gray-400 mt-2 leading-relaxed border-t border-[#262a40] pt-2">
+                ${msg}
+            </p>
+        `;
+    } else {
+        uvContainer.innerHTML =
+            '<p class="text-sm text-gray-400">UV data unavailable</p>';
+    }
+
+    const sunContainer = document.getElementById('sun-tracking-container');
+
+    if (current.sys && current.sys.sunrise && current.sys.sunset) {
+        const srDate = new Date(current.sys.sunrise * 1000);
+        const ssDate = new Date(current.sys.sunset * 1000);
+
+        const srTime = srDate.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const ssTime = ssDate.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        const diffMs = ssDate - srDate;
+
+        const hrs = Math.floor(diffMs / 3600000);
+        const mins = Math.floor((diffMs % 3600000) / 60000);
+
+        sunContainer.innerHTML = `
+            <div class="flex items-center justify-between border-b border-[#262a40] pb-2">
+                <span class="text-sm text-gray-400">
+                    <i class="fa-solid fa-sun text-yellow-500 mr-2"></i>
+                    Sunrise
+                </span>
+                <span class="font-bold text-white">${srTime}</span>
+            </div>
+
+            <div class="flex items-center justify-between border-b border-[#262a40] pb-2">
+                <span class="text-sm text-gray-400">
+                    <i class="fa-solid fa-moon text-blue-300 mr-2"></i>
+                    Sunset
+                </span>
+                <span class="font-bold text-white">${ssTime}</span>
+            </div>
+
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-400">
+                    <i class="fa-solid fa-stopwatch text-green-400 mr-2"></i>
+                    Daylight
+                </span>
+                <span class="font-bold text-white">${hrs}h ${mins}m</span>
+            </div>
+        `;
+    }
+
+    // Temperature Trend Graph
+    const graphContainer =
+        document.getElementById('temp-graph-container');
+
+    const graphData = forecastList.slice(0, 6);
+
+    if (graphContainer) {
+        if (graphData.length > 0) {
+            const temps = graphData.map(item => {
+                const value = Number(item?.main?.temp);
+                return Number.isFinite(value) ? Math.round(value) : null;
+            });
+
+            if (temps.every(t => t !== null)) {
+                const minT = Math.min(...temps) - 2;
+                const maxT = Math.max(...temps) + 2;
+                const range = (maxT - minT) || 1;
+
+                const width = 600;
+                const height = 100;
+
+                const step =
+                    temps.length > 1
+                        ? width / (temps.length - 1)
+                        : width;
+
+                const points = [];
+
+                let svgHtml = `
+                    <svg
+                        viewBox="-20 0 640 120"
+                        class="w-full min-w-[500px] h-full overflow-visible"
+                        role="img"
+                        aria-label="Temperature trend">
+                `;
+
+                temps.forEach((t, i) => {
+                    const x = i * step;
+
+                    const y =
+                        height -
+                        ((t - minT) / range) * (height - 30) -
+                        20;
+
+                    points.push(`${x},${y}`);
+
+                    const rawTime = graphData[i]?.dt;
+
+                    const timeStr = rawTime
+                        ? new Date(rawTime * 1000).toLocaleTimeString([], {
+                              hour: 'numeric',
+                              hour12: true
+                          })
+                        : '--';
+
+                    svgHtml += `
+                        <text
+                            x="${x}"
+                            y="${y - 12}"
+                            fill="white"
+                            font-size="14"
+                            font-weight="bold"
+                            text-anchor="middle">
+                            ${t}°
+                        </text>
+
+                        <circle
+                            cx="${x}"
+                            cy="${y}"
+                            r="4"
+                            fill="#3b82f6">
+                        </circle>
+
+                        <text
+                            x="${x}"
+                            y="${height + 15}"
+                            fill="#9ca3af"
+                            font-size="12"
+                            text-anchor="middle">
+                            ${timeStr}
+                        </text>
+                    `;
+                });
+
+                svgHtml += `
+                    <polyline
+                        points="${points.join(' ')}"
+                        fill="none"
+                        stroke="#3b82f6"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round" />
+                `;
+
+                svgHtml += '</svg>';
+
+                graphContainer.innerHTML = svgHtml;
+            } else {
+                graphContainer.innerHTML =
+                    '<p class="text-sm text-gray-400">Temperature data unavailable.</p>';
+            }
+        } else {
+            graphContainer.innerHTML =
+                '<p class="text-sm text-gray-400">Temperature forecast unavailable.</p>';
+        }
+    }
+
+        // Weather Alerts
+    const alertsContainer = document.getElementById('alerts-container');
+    const alertBadge = document.getElementById('sidebar-alerts-badge');
+
+    if (alertsContainer) {
+        const maxTemp = Number(current?.main?.temp);
+        const windSpeed = Number(current?.wind?.speed);
+
+        const hasHeavyRain = forecastList.some(item =>
+            Number(item?.pop || 0) >= 0.7 ||
+            item?.weather?.[0]?.main === 'Thunderstorm'
+        );
+
+        const activeAlerts = [];
+
+        if (maxTemp >= 42) {
+            activeAlerts.push({
+                icon: 'fa-temperature-arrow-up',
+                color: 'text-red-500',
+                bg: 'bg-red-500/10 border-red-500/30',
+                title: 'Extreme Heat Warning',
+                desc: 'Temperatures have reached dangerous levels. Avoid prolonged outdoor exposure.'
+            });
+        }
+        else if (maxTemp >= 38) {
+            activeAlerts.push({
+                icon: 'fa-temperature-half',
+                color: 'text-orange-500',
+                bg: 'bg-orange-500/10 border-orange-500/30',
+                title: 'High Temperature',
+                desc: `Temperature is extremely high (${Math.round(maxTemp)}°C). Stay hydrated.`
+            });
+        }
+
+        if (hasHeavyRain) {
+            activeAlerts.push({
+                icon: 'fa-cloud-showers-heavy',
+                color: 'text-blue-400',
+                bg: 'bg-blue-500/10 border-blue-500/30',
+                title: 'Heavy Rainfall / Storm',
+                desc: 'Heavy rain or thunderstorms are expected in this area soon.'
+            });
+        }
+
+        if (windSpeed >= 10) {
+            activeAlerts.push({
+                icon: 'fa-wind',
+                color: 'text-gray-300',
+                bg: 'bg-gray-500/20 border-gray-500/40',
+                title: 'Strong Winds',
+                desc: `High wind speeds detected (${Math.round(windSpeed)} km/h).`
+            });
+        }
+
+        if (uviVal >= 8) {
+            activeAlerts.push({
+                icon: 'fa-sun',
+                color: 'text-yellow-500',
+                bg: 'bg-yellow-500/10 border-yellow-500/30',
+                title: 'Dangerous UV Levels',
+                desc: 'UV Index is exceptionally high. Protect your skin and eyes.'
+            });
+        }
+
+        alertsContainer.innerHTML = '';
+
+        if (activeAlerts.length > 0) {
+            if (alertBadge) {
+                alertBadge.innerText = activeAlerts.length;
+                alertBadge.classList.remove('hidden');
+            }
+
+            activeAlerts.forEach(alert => {
+                alertsContainer.innerHTML += `
+                    <div class="p-4 rounded-xl border ${alert.bg} flex gap-4 items-start">
+                        <i class="fa-solid ${alert.icon} ${alert.color} text-xl mt-1"></i>
+
+                        <div>
+                            <h4 class="font-bold ${alert.color} text-sm">
+                                ${alert.title}
+                            </h4>
+
+                            <p class="text-xs text-gray-300 mt-1">
+                                ${alert.desc}
+                            </p>
+                        </div>
+                    </div>
+                `;
+            });
+
+        } else {
+            if (alertBadge) {
+                alertBadge.classList.add('hidden');
+            }
+
+            alertsContainer.innerHTML = `
+                <div class="p-4 rounded-xl border border-green-500/30 bg-green-500/10 flex items-center gap-3">
+                    <i class="fa-solid fa-circle-check text-green-400 text-lg"></i>
+
+                    <span class="text-sm text-green-400 font-medium">
+                        No active weather alerts for this location.
+                    </span>
+                </div>
+            `;
+        }
+    }
+}
+
+function showForecastDetails(dataStr) {
+    const data = JSON.parse(dataStr);
+
+    document.getElementById('modal-date').innerText = data.date;
+    document.getElementById('modal-desc').innerText = data.desc;
+    document.getElementById('modal-max').innerText = data.max;
+    document.getElementById('modal-min').innerText = data.min;
+    document.getElementById('modal-humidity').innerText = data.humidity + '%';
+    document.getElementById('modal-wind').innerText = data.wind + ' km/h';
+
+    document.getElementById('modal-icon').src =
+        `https://openweathermap.org/img/wn/${data.icon}@4x.png`;
+
+    document.getElementById('forecast-modal').classList.remove('hidden');
+}
+
+function closeForecastModal() {
+    document.getElementById('forecast-modal').classList.add('hidden');
+}
+
+
+// ==========================================
+// GUJARAT WEATHER MAP
+// ==========================================
+
+async function initInteractiveMap() {
+    const grid = document.getElementById('interactive-map-grid');
+
+    if (!grid) return;
+
+    grid.innerHTML = `
+        <p class="text-sm text-gray-400 col-span-full text-center py-6">
+            Initializing Gujarat weather nodes...
+        </p>
+    `;
+
+    let html = '';
+
+    const sampleDistricts = [
+        "Ahmedabad",
+        "Mahesana",
+        "Rajkot",
+        "Surat",
+        "Vadodara",
+        "Gandhinagar",
+        "Kutch",
+        "Jamnagar",
+        "Bhavnagar",
+        "Junagadh",
+        "Anand",
+        "Navsari"
+    ];
+
+    for (const d of sampleDistricts) {
+        try {
+            const res = await fetch(
+                `/api/weather?city=${encodeURIComponent(d)}`
+            );
+
+            const json = await res.json();
+
+            const cur = json.current ? json.current : json;
+
+            if (!cur?.main || !cur?.weather?.[0]) {
+                continue;
+            }
+
+            const temp = Math.round(cur.main.temp);
+            const cond = cur.weather[0].description;
+            const hum = cur.main.humidity;
+            const wind = cur.wind?.speed ?? 0;
+
+            let badgeColor =
+                "bg-green-400/20 text-green-400 border-green-400/30";
+
+            if (temp < 20) {
+                badgeColor =
+                    "bg-blue-400/20 text-blue-400 border-blue-400/30";
+            }
+            else if (temp <= 25) {
+                badgeColor =
+                    "bg-teal-400/20 text-teal-400 border-teal-400/30";
+            }
+            else if (temp <= 30) {
+                badgeColor =
+                    "bg-green-400/20 text-green-400 border-green-400/30";
+            }
+            else if (temp <= 35) {
+                badgeColor =
+                    "bg-orange-400/20 text-orange-400 border-orange-400/30";
+            }
+            else {
+                badgeColor =
+                    "bg-red-500/20 text-red-400 border-red-500/30";
+            }
+
+            html += `
+                <div class="bg-[#131521] p-5 rounded-2xl border border-[#262a40] flex flex-col justify-between hover:border-blue-500/50 transition">
+
+                    <div>
+                        <div class="flex justify-between items-start mb-2">
+
+                            <h4 class="font-bold text-white text-base">
+                                ${d}
+                            </h4>
+
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold border ${badgeColor}">
+                                ${temp}°C
+                            </span>
+                        </div>
+
+                        <p class="text-xs text-gray-400 capitalize mb-3">
+                            ${cond}
+                        </p>
+
+                        <div class="text-xs text-gray-400 space-y-1">
+                            <div>
+                                Humidity:
+                                <span class="text-white">${hum}%</span>
+                            </div>
+
+                            <div>
+                                Wind:
+                                <span class="text-white">${wind} km/h</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onclick="switchTab('dashboard'); fetchWeatherData('/api/weather?city=${encodeURIComponent(d)}')"
+                        class="mt-4 w-full bg-[#1b1f30] hover:bg-blue-500 text-blue-400 hover:text-white border border-[#262a40] py-2 rounded-xl text-xs font-medium transition">
+
+                        View Details
+
+                    </button>
+                </div>
+            `;
+
+        } catch (e) {
+            console.error(`Map weather error for ${d}:`, e);
+        }
+    }
+
+    grid.innerHTML = html ||
+        '<p class="text-sm text-gray-400 col-span-full text-center py-6">Weather nodes unavailable.</p>';
+}
+
+
+// ==========================================
+// HISTORICAL WEATHER
+// ==========================================
+
+function populateHistoricalDropdowns() {
+
+    const select =
+        document.getElementById('hist-city');
+
+    if (!select) return;
+
+    select.innerHTML = `
+        <option value="" selected disabled>
+            Select District
+        </option>
+    `;
+
+    gujaratDistricts.forEach(district => {
+
+        const option = document.createElement('option');
+
+        option.value = district;
+        option.textContent = district;
+
+        select.appendChild(option);
+    });
+
+    // Reset historical fields
+    const histCity =
+        document.getElementById('hist-city');
+
+    const histFrom =
+        document.getElementById('hist-from');
+
+    const histTo =
+        document.getElementById('hist-to');
+
+    if (histCity) histCity.value = '';
+    if (histFrom) histFrom.value = '';
+    if (histTo) histTo.value = '';
+}
+async function fetchHistoricalData() {
+
+    const cityElement =
+        document.getElementById('hist-city');
+
+    const fromElement =
+        document.getElementById('hist-from');
+
+    const toElement =
+        document.getElementById('hist-to');
+
+    const results =
+        document.getElementById('historical-results');
+
+    const status =
+        document.getElementById('historical-status');
+
+    const analyzeButton =
+        document.getElementById('historical-analyze-btn');
+
+    const analyzeText =
+        document.getElementById('historical-analyze-text');
+
+    const summary =
+        document.getElementById('historical-summary');
+
+    const lastUpdated =
+        document.getElementById('historical-last-updated');
+
+
+    if (
+        !cityElement ||
+        !fromElement ||
+        !toElement ||
+        !results ||
+        !status ||
+        !analyzeButton ||
+        !analyzeText
+    ) {
+        console.error(
+            'Historical weather elements are missing from the page.'
+        );
+
+        return;
+    }
+
+
+    const city =
+        cityElement.value.trim();
+
+    const from =
+        fromElement.value;
+
+    const to =
+        toElement.value;
+
+
+    // ==========================================
+    // VALIDATION
+    // ==========================================
+
+    if (!city) {
+
+        showHistoricalStatus(
+            'Please select a Gujarat district.',
+            'error'
+        );
+
+        results.classList.add('hidden');
+
+        cityElement.focus();
+
+        return;
+    }
+
+
+    if (!from) {
+
+        showHistoricalStatus(
+            'Please select the From Date.',
+            'error'
+        );
+
+        results.classList.add('hidden');
+
+        fromElement.focus();
+
+        return;
+    }
+
+
+    if (!to) {
+
+        showHistoricalStatus(
+            'Please select the To Date.',
+            'error'
+        );
+
+        results.classList.add('hidden');
+
+        toElement.focus();
+
+        return;
+    }
+
+
+    if (from > to) {
+
+        showHistoricalStatus(
+            'From Date cannot be later than To Date.',
+            'error'
+        );
+
+        results.classList.add('hidden');
+
+        fromElement.focus();
+
+        return;
+    }
+
+
+    // ==========================================
+    // LOADING STATE
+    // ==========================================
+
+    analyzeButton.disabled = true;
+
+    analyzeText.innerHTML = `
+        <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+        Analyzing...
+    `;
+
+
+    results.classList.add('hidden');
+
+
+    showHistoricalStatus(
+        `
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-spinner fa-spin text-blue-400 text-lg"></i>
+
+                <div>
+                    <p class="text-white font-medium">
+                        Analyzing historical weather...
+                    </p>
+
+                    <p class="text-gray-400 text-xs mt-1">
+                        Processing ${escapeHtml(city)}
+                        from ${escapeHtml(from)}
+                        to ${escapeHtml(to)}
+                    </p>
+                </div>
+            </div>
+        `,
+        'loading',
+        true
+    );
+
+
+    try {
+
+        const query =
+            `/api/historical` +
+            `?city=${encodeURIComponent(city)}` +
+            `&from=${encodeURIComponent(from)}` +
+            `&to=${encodeURIComponent(to)}`;
+
+
+        const response =
+            await fetch(query, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+
+        const contentType =
+            response.headers.get('content-type') || '';
+
+
+        let data = {};
+
+        if (contentType.includes('application/json')) {
+            data = await response.json();
+        }
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                data.error ||
+                data.message ||
+                `Historical analysis failed (${response.status}).`
+            );
+        }
+
+
+        // ==========================================
+        // UPDATE RESULT CARDS
+        // ==========================================
+
+        const avgTemp =
+            document.getElementById('hist-avg');
+
+        const maxTemp =
+            document.getElementById('hist-max');
+
+        const minTemp =
+            document.getElementById('hist-min');
+
+        const rainfall =
+            document.getElementById('hist-rain');
+
+        const humidity =
+            document.getElementById('hist-humidity');
+
+
+        if (avgTemp) {
+            avgTemp.innerText =
+                `${data.avg_temp ?? '--'}°C`;
+        }
+
+
+        if (maxTemp) {
+            maxTemp.innerText =
+                `${data.max_temp ?? '--'}°C`;
+        }
+
+
+        if (minTemp) {
+            minTemp.innerText =
+                `${data.min_temp ?? '--'}°C`;
+        }
+
+
+        if (rainfall) {
+            rainfall.innerText =
+                `${data.total_rainfall ?? '--'} mm`;
+        }
+
+
+        if (humidity) {
+            humidity.innerText =
+                `${data.avg_humidity ?? '--'}%`;
+        }
+
+
+        // ==========================================
+        // SUMMARY
+        // ==========================================
+
+        if (summary) {
+
+            summary.innerText =
+                `${city} historical weather analysis from ${from} to ${to}.`;
+        }
+
+
+        if (lastUpdated) {
+
+            lastUpdated.innerText =
+                `Analyzed: ${new Date().toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })}`;
+        }
+
+
+        // ==========================================
+        // SHOW SUCCESS
+        // ==========================================
+
+        results.classList.remove('hidden');
+
+        showHistoricalStatus(
+            `
+                <div class="flex items-center gap-3">
+                    <i class="fa-solid fa-circle-check text-green-400 text-lg"></i>
+
+                    <div>
+                        <p class="text-green-400 font-medium">
+                            Historical analysis completed successfully.
+                        </p>
+
+                        <p class="text-gray-400 text-xs mt-1">
+                            ${escapeHtml(city)}
+                            • ${escapeHtml(from)}
+                            → ${escapeHtml(to)}
+                        </p>
+                    </div>
+                </div>
+            `,
+            'success',
+            true
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            'Historical weather error:',
+            error
+        );
+
+
+        results.classList.add('hidden');
+
+
+        showHistoricalStatus(
+            `
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-circle-exclamation text-red-400 text-lg mt-0.5"></i>
+
+                    <div>
+                        <p class="text-red-400 font-medium">
+                            Historical analysis failed.
+                        </p>
+
+                        <p class="text-gray-400 text-xs mt-1">
+                            ${escapeHtml(
+                                error.message ||
+                                'Unable to load historical weather data.'
+                            )}
+                        </p>
+                    </div>
+                </div>
+            `,
+            'error',
+            true
+        );
+
+    } finally {
+
+        analyzeButton.disabled = false;
+
+        analyzeText.innerHTML = `
+            <i class="fa-solid fa-chart-line mr-2"></i>
+            Analyze
+        `;
+    }
+}
+
+function showHistoricalStatus(message, type = 'info', allowHtml = false) {
+
+    const status =
+        document.getElementById('historical-status');
+
+    if (!status) {
+        console.error('historical-status element not found.');
+        return;
+    }
+
+    // Remove previous status classes
+    status.classList.remove(
+        'hidden',
+        'bg-red-500/10',
+        'border-red-500/30',
+        'text-red-400',
+        'bg-blue-500/10',
+        'border-blue-500/30',
+        'text-blue-400',
+        'bg-green-500/10',
+        'border-green-500/30',
+        'text-green-400'
+    );
+
+    // Set message
+    if (allowHtml) {
+        status.innerHTML = message;
+    } else {
+        status.textContent = message;
+    }
+
+    // Apply status type
+    if (type === 'error') {
+
+        status.classList.add(
+            'bg-red-500/10',
+            'border',
+            'border-red-500/30',
+            'text-red-400'
+        );
+
+    } else if (type === 'success') {
+
+        status.classList.add(
+            'bg-green-500/10',
+            'border',
+            'border-green-500/30',
+            'text-green-400'
+        );
+
+    } else {
+
+        // info / loading
+        status.classList.add(
+            'bg-blue-500/10',
+            'border',
+            'border-blue-500/30',
+            'text-blue-400'
+        );
+    }
+
+    status.classList.remove('hidden');
+}
+// ==========================================
+// AI METEOROLOGIST CHATBOT
+// ==========================================
+
+async function sendAiMessage() {
+    const input = document.getElementById('ai-input');
+
+    if (!input) return;
+
+    const prompt = input.value.trim();
+
+    if (!prompt) return;
+
+    const chatContainer =
+        document.getElementById('chat-messages');
+
+    if (!chatContainer) return;
+
+    chatContainer.innerHTML += `
+        <div class="flex items-start gap-3 justify-end">
+
+            <div class="bg-blue-600 text-white p-4 rounded-2xl text-sm max-w-lg leading-relaxed">
+                ${escapeHtml(prompt)}
+            </div>
+
+            <div class="w-8 h-8 rounded-full bg-gray-700 text-white flex items-center justify-center shrink-0 text-xs font-bold">
+                You
+            </div>
+
+        </div>
+    `;
+
+    input.value = '';
+
+    chatContainer.scrollTop =
+        chatContainer.scrollHeight;
+
+    const loadingId =
+        'ai-load-' + Date.now();
+
+    chatContainer.innerHTML += `
+        <div id="${loadingId}" class="flex items-start gap-3">
+
+            <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">
+                AI
+            </div>
+
+            <div class="bg-[#131521] border border-[#262a40] p-4 rounded-2xl text-sm text-gray-400 italic">
+                Consulting Gujarat climate models...
+            </div>
+
+        </div>
+    `;
+
+    chatContainer.scrollTop =
+        chatContainer.scrollHeight;
+
+    try {
+        const csrfToken =
+            document
+                .querySelector('meta[name="csrf-token"]')
+                ?.getAttribute('content') || '';
+
+        if (!csrfToken) {
+            throw new Error(
+                'CSRF token not found in page.'
+            );
+        }
+
+        const response = await fetch(
+            '/api/meteorologist',
+            {
+                method: 'POST',
+
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+
+                body: JSON.stringify({
+                    prompt: prompt,
+                    context:
+                        liveDashboardCache[currentActiveCity] || {}
+                })
+            }
+        );
+
+        const contentType =
+            response.headers.get('content-type') || '';
+
+        const resJson =
+            contentType.includes('application/json')
+                ? await response.json()
+                : {};
+
+        const loadingEl =
+            document.getElementById(loadingId);
+
+        if (loadingEl) {
+            loadingEl.remove();
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                resJson.message ||
+                resJson.error ||
+                `AI request failed (${response.status})`
+            );
+        }
+
+        const replyText =
+            resJson.reply ||
+            'I am currently unable to generate a response. Please try again later.';
+
+        chatContainer.innerHTML += `
+            <div class="flex items-start gap-3">
+
+                <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">
+                    AI
+                </div>
+
+                <div class="bg-[#131521] border border-[#262a40] p-4 rounded-2xl text-sm text-gray-200 max-w-lg leading-relaxed">
+                    ${escapeHtml(replyText)}
+                </div>
+
+            </div>
+        `;
+
+        chatContainer.scrollTop =
+            chatContainer.scrollHeight;
+
+    } catch (e) {
+
+        const loadingEl =
+            document.getElementById(loadingId);
+
+        if (loadingEl) {
+            loadingEl.remove();
+        }
+
+        console.error(
+            'Meteorologist AI error:',
+            e
+        );
+
+        chatContainer.innerHTML += `
+            <div class="flex items-start gap-3">
+
+                <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">
+                    AI
+                </div>
+
+                <div class="bg-[#131521] border border-red-500/30 p-4 rounded-2xl text-sm text-red-400">
+                    Connection error. Please try again.
+                </div>
+
+            </div>
+        `;
+
+        chatContainer.scrollTop =
+            chatContainer.scrollHeight;
+    }
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ==========================================
+// FAVORITES
+// ==========================================
+
+document.getElementById('favorite-btn')?.addEventListener('click', () => {
+    if (!currentActiveCity) return;
+
+    let favs = getFavorites();
+
+    if (favs.includes(currentActiveCity)) {
+        favs = favs.filter(city => city !== currentActiveCity);
+    } else {
+        favs.push(currentActiveCity);
+    }
+
+    localStorage.setItem(
+        'gujarat_weather_favorites',
+        JSON.stringify(favs)
+    );
+
+    updateFavoriteStarUI();
+    renderFavorites();
+});
+
+function getFavorites() {
+    try {
+        return JSON.parse(
+            localStorage.getItem('gujarat_weather_favorites')
+        ) || [];
+    } catch (error) {
+        console.error('Favorites parse error:', error);
+        return [];
+    }
+}
+
+function updateFavoriteStarUI() {
+    const icon = document.getElementById('favorite-icon');
+
+    if (!icon) return;
+
+    const isFavorite =
+        getFavorites().includes(currentActiveCity);
+
+    if (isFavorite) {
+        icon.classList.remove('fa-regular');
+        icon.classList.add('fa-solid', 'text-yellow-500');
+    } else {
+        icon.classList.remove('fa-solid', 'text-yellow-500');
+        icon.classList.add('fa-regular');
+    }
+}
+
+async function renderFavorites() {
+    const favs = getFavorites();
+
+    const container =
+        document.getElementById('favorites-container');
+
+    const msg =
+        document.getElementById('no-favorites-msg');
+
+    if (!container || !msg) return;
+
+    if (favs.length === 0) {
+        container.innerHTML = '';
+        msg.style.display = 'block';
+        return;
+    }
+
+    msg.style.display = 'none';
+    container.innerHTML = '';
+
+    for (const city of favs) {
+        try {
+            const response = await fetch(
+                `/api/weather?city=${encodeURIComponent(city)}`
+            );
+
+            if (!response.ok) continue;
+
+            const data = await response.json();
+            const current =
+                data.current ? data.current : data;
+
+            if (
+                !current?.weather?.[0] ||
+                !current?.main
+            ) {
+                continue;
+            }
+
+            const description =
+                current.weather[0].description || 'Unknown';
+
+            const temperature =
+                Number.isFinite(Number(current.main.temp))
+                    ? Math.round(current.main.temp)
+                    : '--';
+
+            container.innerHTML += `
+                <div
+                    onclick="switchTab('dashboard'); fetchWeatherData('/api/weather?city=${encodeURIComponent(city)}')"
+                    class="fav-card cursor-pointer flex items-center justify-between gap-4 bg-[#262a40] hover:bg-[#32364a] px-4 py-3 rounded-xl transition min-w-[160px] snap-center border border-[#32364a]"
+                >
+                    <div class="flex flex-col">
+                        <span class="text-white font-medium text-sm flex items-center gap-1">
+                            <i class="fa-solid fa-star text-yellow-500 text-[10px]"></i>
+                            ${escapeHtml(city)}
+                        </span>
+
+                        <span class="text-gray-400 text-xs capitalize">
+                            ${escapeHtml(description)}
+                        </span>
+                    </div>
+
+                    <span class="text-lg font-bold text-white">
+                        ${temperature}°
+                    </span>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error(
+                `Favorite weather error for ${city}:`,
+                error
+            );
+        }
+    }
+}
+
+
+// ==========================================
+// SEARCH
+// ==========================================
+
+document.getElementById('search-btn')?.addEventListener(
+    'click',
+    () => {
+        const input =
+            document.getElementById('city');
+
+        if (!input) return;
+
+        const city = input.value.trim();
+
+        if (!city) {
+            showAlert('Please enter a city or district name.');
+            return;
+        }
+
+        switchTab('dashboard');
+
+        fetchWeatherData(
+            `/api/weather?city=${encodeURIComponent(city)}`
+        );
+    }
+);
+
+document.getElementById('city')?.addEventListener(
+    'keydown',
+    event => {
+        if (event.key === 'Enter') {
+            document
+                .getElementById('search-btn')
+                ?.click();
+        }
+    }
+);
+
+
+// ==========================================
+// GPS / CURRENT LOCATION
+// ==========================================
+
+document.getElementById('location-btn')?.addEventListener(
+    'click',
+    () => {
+
+        if (!navigator.geolocation) {
+            showAlert(
+                'Geolocation is not supported by this browser.'
+            );
+            return;
+        }
+
+        showAlert(
+            'Detecting your location...',
+            false
+        );
+
+        navigator.geolocation.getCurrentPosition(
+            position => {
+
+                switchTab('dashboard');
+
+                const latitude =
+                    position.coords.latitude;
+
+                const longitude =
+                    position.coords.longitude;
+
+                fetchWeatherData(
+                    `/api/weather?lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`
+                );
+            },
+
+            error => {
+
+                console.error(
+                    'Geolocation error:',
+                    error
+                );
+
+                let message =
+                    'Unable to detect your location.';
+
+                if (error.code === 1) {
+                    message =
+                        'Location permission was denied. Please allow location access.';
+                }
+                else if (error.code === 2) {
+                    message =
+                        'Your location could not be determined.';
+                }
+                else if (error.code === 3) {
+                    message =
+                        'Location request timed out.';
+                }
+
+                showAlert(message);
+            },
+
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 300000
+            }
+        );
+    }
+);
+
+
+// ==========================================
+// GUJARAT DISTRICT GRID
+// ==========================================
+
+function renderDistrictsGrid(districts) {
+    const grid =
+        document.getElementById('districts-grid');
+
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    if (!districts.length) {
+        grid.innerHTML = `
+            <div class="col-span-full text-center py-6 text-gray-400 text-sm">
+                No Gujarat district found.
+            </div>
+        `;
+
+        return;
+    }
+
+    districts.forEach(district => {
+
+        const button =
+            document.createElement('button');
+
+        button.type = 'button';
+
+        button.className =
+            'district-btn text-left px-3 py-2 bg-[#262a40] hover:bg-blue-500 hover:text-white text-gray-300 text-sm rounded-lg transition border border-[#32364a]';
+
+        button.textContent = district;
+
+        button.addEventListener('click', () => {
+
+            switchTab('dashboard');
+
+            fetchWeatherData(
+                `/api/weather?city=${encodeURIComponent(district)}`
+            );
+        });
+
+        grid.appendChild(button);
+    });
+}
+
+
+// ==========================================
+// DISTRICT SEARCH / FILTER
+// ==========================================
+
+document.getElementById('district-filter')
+    ?.addEventListener(
+        'input',
+        event => {
+
+            const searchValue =
+                event.target.value
+                    .trim()
+                    .toLowerCase();
+
+            const filtered =
+                gujaratDistricts.filter(
+                    district =>
+                        district
+                            .toLowerCase()
+                            .includes(searchValue)
+                );
+
+            renderDistrictsGrid(filtered);
+        }
+    );
+
+
+// ==========================================
+// COMMON ALERT MESSAGE
+// ==========================================
+
+function showAlert(message, isError = true) {
+
+    const box =
+        document.getElementById('alert-box');
+
+    if (!box) return;
+
+    if (!message) {
+        box.classList.add('hidden');
+        return;
+    }
+
+    box.innerText = message;
+
+    box.classList.remove(
+        'text-blue-400',
+        'text-orange-400'
+    );
+
+    if (isError) {
+        box.classList.add('text-orange-400');
+    } else {
+        box.classList.add('text-blue-400');
+    }
+
+    box.classList.remove('hidden');
+
+    if (isError) {
+        clearTimeout(
+            window.weatherAlertTimeout
+        );
+
+        window.weatherAlertTimeout =
+            setTimeout(() => {
+                box.classList.add('hidden');
+            }, 5000);
+    }
+}
+
+
+// ==========================================
+// AI QUICK PROMPTS
+// ==========================================
+
+async function sendQuickPrompt(query) {
+
+    const inputField =
+        document.getElementById('ai-input');
+
+    if (!inputField) return;
+
+    inputField.value = query;
+
+    await sendAiMessage();
+}
+
+
+// ==========================================
+// AI ENTER KEY SUPPORT
+// ==========================================
+
+document.getElementById('ai-input')
+    ?.addEventListener(
+        'keydown',
+        async event => {
+
+            if (
+                event.key === 'Enter' &&
+                !event.shiftKey
+            ) {
+                event.preventDefault();
+
+                await sendAiMessage();
+            }
+        }
+    );
+
+
+// ==========================================
+// CLOSE FORECAST MODAL ON BACKDROP CLICK
+// ==========================================
+
+document.getElementById('forecast-modal')
+    ?.addEventListener(
+        'click',
+        event => {
+
+            if (
+                event.target.id ===
+                'forecast-modal'
+            ) {
+                closeForecastModal();
+            }
+        }
+    );
+
+
+// ==========================================
+// ESC KEY
+// ==========================================
+
+document.addEventListener(
+    'keydown',
+    event => {
+
+        if (event.key === 'Escape') {
+
+            const modal =
+                document.getElementById(
+                    'forecast-modal'
+                );
+
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+    }
+);
+
+
+// ==========================================
+// SAFE INITIALIZATION
+// ==========================================
+
+window.addEventListener(
+    'load',
+    () => {
+
+        // Restore favorite UI after all DOM
+        // elements are available.
+        updateFavoriteStarUI();
+
+        // Ensure initial tab is dashboard.
+        const dashboard =
+            document.getElementById('tab-dashboard');
+
+        if (dashboard) {
+            dashboard.classList.remove('hidden');
+        }
+
+        // Prevent stale cached script problems
+        // by recording current JS version.
+        console.log(
+            'Gujarat Weather App initialized successfully.'
+        );
+    }
+);
