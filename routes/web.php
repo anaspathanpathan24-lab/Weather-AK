@@ -13,3 +13,6 @@ Route::get('/api/historical', [WeatherController::class, 'getHistorical']);
 
 // API Route for AI Assistant
 Route::post('/api/meteorologist', [WeatherController::class, 'askMeteorologist']);
+
+// Add this line to routes/web.php with your other API routes:
+Route::get('/api/air-quality', [WeatherController::class, 'getAirQuality']);

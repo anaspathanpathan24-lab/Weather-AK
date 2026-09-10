@@ -120,6 +120,11 @@ function updateDashboardUI(data) {
     currentActiveCity = current.name;
     liveDashboardCache[current.name] = data;
 
+    fetchAirQuality(
+    current?.coord?.lat,
+    current?.coord?.lon
+);
+
     document.getElementById('city-name').innerText = current.name;
     document.getElementById('weather-desc').innerText = current.weather[0].description;
     document.getElementById('temp').innerText = Math.round(current.main.temp) + '°';
@@ -1833,3 +1838,216 @@ window.addEventListener(
         );
     }
 );
+
+/* =========================================================
+   AQI FRONTEND INTEGRATION
+   Add the CALL inside updateDashboardUI() immediately after:
+
+   currentActiveCity = current.name;
+   liveDashboardCache[current.name] = data;
+
+   ========================================================= */
+
+fetchAirQuality(
+    current?.coord?.lat,
+    current?.coord?.lon
+);
+
+
+/* =========================================================
+   ADD THESE FUNCTIONS AT THE END OF weather-app.js
+   ========================================================= */
+
+async function fetchAirQuality(lat, lon) {
+    const content = document.getElementById('aqi-content');
+
+    if (!content) return;
+
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
+        showAQIState('error', 'Location coordinates are unavailable.');
+        return;
+    }
+
+    showAQIState('loading');
+
+    try {
+        const response = await fetch(
+            `/api/air-quality?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
+            {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }
+        );
+
+        const contentType = response.headers.get('content-type') || '';
+        const data = contentType.includes('application/json')
+            ? await response.json()
+            : {};
+
+        if (!response.ok) {
+            throw new Error(
+                data.error || data.message || `AQI request failed (${response.status})`
+            );
+        }
+
+        if (!data.aqi || !data.components) {
+            throw new Error('Air quality data is incomplete.');
+        }
+
+        renderAQICard(data);
+
+    } catch (error) {
+        console.error('AQI error:', error);
+        showAQIState('error', error.message || 'Unable to load air quality data.');
+    }
+}
+
+
+function renderAQICard(data) {
+    const content = document.getElementById('aqi-content');
+    if (!content) return;
+
+    const aqi = Math.max(1, Math.min(5, Number(data.aqi)));
+    const category = data.category || 'Unknown';
+    const color = data.color || '#60a5fa';
+    const health = data.health_recommendation || 'Air quality information is currently unavailable.';
+    const components = data.components || {};
+
+    const circumference = 314.16;
+    const progress = aqi / 5;
+    const dashOffset = circumference * (1 - progress);
+
+    const safe = value => {
+        const number = Number(value);
+        return Number.isFinite(number) ? number.toFixed(1) : '--';
+    };
+
+    content.innerHTML = `
+        <div class="flex flex-col items-center">
+            <div class="relative w-36 h-36 flex items-center justify-center">
+                <svg viewBox="0 0 120 120" class="w-full h-full -rotate-90">
+                    <circle
+                        cx="60"
+                        cy="60"
+                        r="50"
+                        fill="none"
+                        stroke="#262a40"
+                        stroke-width="10"
+                    />
+
+                    <circle
+                        cx="60"
+                        cy="60"
+                        r="50"
+                        fill="none"
+                        stroke="${color}"
+                        stroke-width="10"
+                        stroke-linecap="round"
+                        stroke-dasharray="${circumference}"
+                        stroke-dashoffset="${dashOffset}"
+                        style="transition: stroke-dashoffset .5s ease, stroke .3s ease;"
+                    />
+                </svg>
+
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="text-4xl font-bold text-white leading-none">
+                        ${aqi}
+                    </span>
+                    <span class="text-[10px] text-gray-500 mt-1">
+                        AQI / 5
+                    </span>
+                </div>
+            </div>
+
+            <div class="text-center -mt-1">
+                <div
+                    class="text-lg font-bold"
+                    style="color:${color};"
+                >
+                    ${escapeHtml(category)}
+                </div>
+
+                <div class="text-[10px] text-gray-500 mt-0.5">
+                    OpenWeather AQI scale
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="rounded-xl bg-[#131521] border border-[#262a40] p-2.5">
+                <span class="block text-gray-500">PM2.5</span>
+                <strong class="text-white">${safe(components.pm2_5)} <span class="text-gray-500 font-normal">µg/m³</span></strong>
+            </div>
+
+            <div class="rounded-xl bg-[#131521] border border-[#262a40] p-2.5">
+                <span class="block text-gray-500">PM10</span>
+                <strong class="text-white">${safe(components.pm10)} <span class="text-gray-500 font-normal">µg/m³</span></strong>
+            </div>
+
+            <div class="rounded-xl bg-[#131521] border border-[#262a40] p-2.5">
+                <span class="block text-gray-500">CO</span>
+                <strong class="text-white">${safe(components.co)} <span class="text-gray-500 font-normal">µg/m³</span></strong>
+            </div>
+
+            <div class="rounded-xl bg-[#131521] border border-[#262a40] p-2.5">
+                <span class="block text-gray-500">NO₂</span>
+                <strong class="text-white">${safe(components.no2)} <span class="text-gray-500 font-normal">µg/m³</span></strong>
+            </div>
+
+            <div class="rounded-xl bg-[#131521] border border-[#262a40] p-2.5 col-span-2">
+                <span class="block text-gray-500">SO₂</span>
+                <strong class="text-white">${safe(components.so2)} <span class="text-gray-500 font-normal">µg/m³</span></strong>
+            </div>
+        </div>
+
+        <div class="rounded-xl border p-3 text-xs"
+             style="border-color:${color}55; background:${color}10;">
+            <div class="flex items-start gap-2">
+                <i class="fa-solid fa-heart-pulse mt-0.5" style="color:${color};"></i>
+                <p class="text-gray-300 leading-relaxed">
+                    ${escapeHtml(health)}
+                </p>
+            </div>
+        </div>
+    `;
+}
+
+
+function showAQIState(type, message = '') {
+    const content = document.getElementById('aqi-content');
+    if (!content) return;
+
+    if (type === 'loading') {
+        content.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-8 text-center">
+                <i class="fa-solid fa-spinner fa-spin text-blue-400 text-2xl mb-3"></i>
+                <p class="text-sm text-gray-300">Loading air quality...</p>
+                <p class="text-[11px] text-gray-500 mt-1">Fetching live AQI data</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (type === 'empty') {
+        content.innerHTML = `
+            <div class="flex flex-col items-center justify-center py-8 text-center">
+                <i class="fa-solid fa-wind text-gray-500 text-2xl mb-3"></i>
+                <p class="text-sm text-gray-300">Air quality unavailable</p>
+                <p class="text-[11px] text-gray-500 mt-1">No AQI data was returned for this location.</p>
+            </div>
+        `;
+        return;
+    }
+
+    content.innerHTML = `
+        <div class="flex flex-col items-center justify-center py-8 text-center">
+            <i class="fa-solid fa-triangle-exclamation text-orange-400 text-2xl mb-3"></i>
+            <p class="text-sm text-gray-300">Unable to load AQI</p>
+            <p class="text-[11px] text-gray-500 mt-1 max-w-[230px]">
+                ${escapeHtml(message || 'Please try again after changing the location.')}
+            </p>
+        </div>
+    `;
+}

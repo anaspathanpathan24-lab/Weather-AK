@@ -126,18 +126,34 @@
                         </div>
                     </div>
 
-                    <!-- 4. Sun & Moon Tracking AND Weather Alerts -->
+                    <!-- 4. Sun & Moon Tracking + Air Quality + Weather Alerts -->
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <!-- Sun & Moon Card (1 Column width) -->
+
+                        <!-- Sun & Moon Card -->
                         <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1">
                             <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-solid fa-moon text-blue-300 mr-2"></i> Sun & Moon Tracking</h3>
                             <div class="flex flex-col gap-3 text-sm" id="sun-tracking-container">
                                 <!-- Dynamically populated -->
                             </div>
                         </div>
-                        
-                        <!-- Weather Alerts Card (2 Columns width) -->
-                        <div id="alerts-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-2">
+
+                        <!-- Air Quality Index Card -->
+                        <div id="aqi-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1">
+                            <h3 class="text-gray-400 font-semibold mb-4 text-sm uppercase tracking-wider">
+                                <i class="fa-solid fa-lungs text-blue-400 mr-2"></i> Air Quality Index
+                            </h3>
+
+                            <div id="aqi-content" class="flex flex-col gap-4">
+                                <!-- AQI dynamically populated -->
+                                <div id="aqi-loading" class="flex items-center justify-center gap-2 py-6 text-gray-400 text-sm">
+                                    <i class="fa-solid fa-spinner fa-spin text-blue-400"></i>
+                                    Loading air quality...
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Weather Alerts Card -->
+                        <div id="alerts-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1">
                             <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-solid fa-bell mr-2"></i> Weather Alerts</h3>
                             <div id="alerts-container" class="flex flex-col gap-3"></div>
                         </div>

@@ -253,6 +253,127 @@ class WeatherController extends Controller
         }));
     }
 
+    // Add this method inside WeatherController.php (for example, before askMeteorologist()).
+
+public function getAirQuality(Request $request)
+{
+    $validated = $request->validate([
+        'lat' => ['required', 'numeric', 'between:-90,90'],
+        'lon' => ['required', 'numeric', 'between:-180,180'],
+    ]);
+
+    $apiKey = env('OPENWEATHER_API_KEY');
+
+    if (!$apiKey) {
+        return response()->json([
+            'error' => 'OpenWeather API key is not configured.'
+        ], 503);
+    }
+
+    $lat = (float) $validated['lat'];
+    $lon = (float) $validated['lon'];
+
+    try {
+        $cacheKey = sprintf('air_quality:%s:%s', round($lat, 4), round($lon, 4));
+
+        $airQuality = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($lat, $lon, $apiKey) {
+            $response = Http::timeout(10)->get(
+                'https://api.openweathermap.org/data/2.5/air_pollution',
+                [
+                    'lat' => $lat,
+                    'lon' => $lon,
+                    'appid' => $apiKey,
+                ]
+            );
+
+            if (!$response->successful()) {
+                Log::error('OpenWeather Air Pollution API failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'lat' => $lat,
+                    'lon' => $lon,
+                ]);
+
+                throw new \RuntimeException('Air quality provider request failed.');
+            }
+
+            return $response->json();
+        });
+
+        $item = $airQuality['list'][0] ?? null;
+        $components = $item['components'] ?? null;
+
+        if (!$item || !isset($item['main']['aqi']) || !$components) {
+            return response()->json([
+                'error' => 'Air quality data is currently unavailable for this location.'
+            ], 404);
+        }
+
+        $aqi = (int) $item['main']['aqi'];
+
+        // OpenWeather Air Pollution API uses AQI 1-5:
+        // 1 = Good, 2 = Fair, 3 = Moderate, 4 = Poor, 5 = Very Poor.
+        $categories = [
+            1 => [
+                'name' => 'Good',
+                'color' => '#22c55e',
+                'health' => 'Air quality is good. Enjoy normal outdoor activities.',
+            ],
+            2 => [
+                'name' => 'Fair',
+                'color' => '#eab308',
+                'health' => 'Air quality is acceptable. Sensitive people should monitor symptoms.',
+            ],
+            3 => [
+                'name' => 'Moderate',
+                'color' => '#f59e0b',
+                'health' => 'Consider reducing prolonged outdoor exertion if you are sensitive to air pollution.',
+            ],
+            4 => [
+                'name' => 'Poor',
+                'color' => '#f97316',
+                'health' => 'Reduce prolonged outdoor activity, especially for sensitive groups.',
+            ],
+            5 => [
+                'name' => 'Very Poor',
+                'color' => '#ef4444',
+                'health' => 'Limit outdoor exposure and consider using a mask in polluted conditions.',
+            ],
+        ];
+
+        $category = $categories[$aqi] ?? $categories[5];
+
+        return response()->json([
+            'aqi' => $aqi,
+            'category' => $category['name'],
+            'color' => $category['color'],
+            'health_recommendation' => $category['health'],
+            'scale' => 'OpenWeather AQI 1-5',
+            'updated_at' => isset($item['dt']) ? date(DATE_ATOM, (int) $item['dt']) : now()->toIso8601String(),
+            'components' => [
+                'pm2_5' => isset($components['pm2_5']) ? round((float) $components['pm2_5'], 1) : null,
+                'pm10' => isset($components['pm10']) ? round((float) $components['pm10'], 1) : null,
+                'co' => isset($components['co']) ? round((float) $components['co'], 1) : null,
+                'no2' => isset($components['no2']) ? round((float) $components['no2'], 1) : null,
+                'so2' => isset($components['so2']) ? round((float) $components['so2'], 1) : null,
+            ],
+            'units' => 'µg/m³',
+        ]);
+
+    } catch (\Throwable $e) {
+        Log::error('Air quality exception', [
+            'message' => $e->getMessage(),
+            'lat' => $lat,
+            'lon' => $lon,
+        ]);
+
+        return response()->json([
+            'error' => 'Unable to load air quality data right now.'
+        ], 502);
+    }
+}
+
+
     public function askMeteorologist(Request $request)
     {
         $prompt = $request->prompt ?? '';
