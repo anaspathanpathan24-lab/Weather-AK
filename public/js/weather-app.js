@@ -130,7 +130,13 @@ function updateDashboardUI(data) {
     document.getElementById('temp').innerText = Math.round(current.main.temp) + '°';
     document.getElementById('humidity').innerText = current.main.humidity + '%';
     document.getElementById('wind').innerText = current.wind.speed + ' km/h';
-    document.getElementById('pressure').innerText = (current.main.pressure ?? '--') + ' hPa';
+    document.getElementById('pressure').innerText = (current.main.pressure ?? '--') + ' hPa';   
+
+    renderHeatStress(
+    current?.main?.temp,
+    current?.main?.feels_like,
+    current?.main?.humidity
+);
 
     if (current.weather[0].icon) {
         document.getElementById('weather-icon').src =
@@ -289,52 +295,7 @@ function updateDashboardUI(data) {
         `;
     });
 
-    const uvContainer = document.getElementById('uv-container');
-
-    let uviVal = 0;
-
-    if (data.uv && data.uv.value !== undefined) {
-        uviVal = Math.round(data.uv.value);
-
-        let category = 'Low';
-        let msg = 'Minimal sun protection needed.';
-        let color = 'text-green-400';
-
-        if (uviVal >= 11) {
-            category = 'Extreme';
-            msg = 'Avoid prolonged outdoor exposure.';
-            color = 'text-purple-400';
-        }
-        else if (uviVal >= 8) {
-            category = 'Very High';
-            msg = 'Extra protection is recommended.';
-            color = 'text-red-400';
-        }
-        else if (uviVal >= 6) {
-            category = 'High';
-            msg = 'Use sunscreen and seek shade.';
-            color = 'text-orange-400';
-        }
-        else if (uviVal >= 3) {
-            category = 'Moderate';
-            msg = 'Consider wearing sunglasses.';
-            color = 'text-yellow-400';
-        }
-
-        uvContainer.innerHTML = `
-            <div class="flex items-end gap-3 mb-2">
-                <span class="text-5xl font-bold text-white">${uviVal}</span>
-                <span class="text-lg font-semibold ${color} mb-1">${category}</span>
-            </div>
-
-            <p class="text-xs text-gray-400 mt-2 leading-relaxed border-t border-[#262a40] pt-2">
-                ${msg}
-            </p>
-        `;
-    } else {
-        uvContainer.innerHTML =
-            '<p class="text-sm text-gray-400">UV data unavailable</p>';
-    }
+   renderUvIndex(data.uv);
 
     const sunContainer = document.getElementById('sun-tracking-container');
 
@@ -597,6 +558,221 @@ function updateDashboardUI(data) {
             `;
         }
     }
+}
+
+ // ==========================================
+// DYNAMIC UV INDEX
+// ==========================================
+
+function renderUvIndex(uvData) {
+
+    const container =
+        document.getElementById('uv-container');
+
+    if (!container) return;
+
+
+    // Loading / unavailable state
+    if (!uvData || uvData.available === false) {
+
+        container.innerHTML = `
+            <div class="flex flex-col justify-center h-full py-2">
+
+                <div class="flex items-center gap-2 text-gray-400">
+                    <i class="fa-solid fa-circle-exclamation text-orange-400"></i>
+
+                    <span class="text-sm font-medium">
+                        UV data unavailable
+                    </span>
+                </div>
+
+                <p class="text-xs text-gray-500 mt-2">
+                    ${escapeHtml(
+                        uvData?.error ||
+                        'UV information could not be loaded.'
+                    )}
+                </p>
+
+            </div>
+        `;
+
+        return;
+    }
+
+
+    const uv =
+        Number(uvData.value);
+
+    if (!Number.isFinite(uv)) {
+
+        container.innerHTML = `
+            <p class="text-sm text-gray-400">
+                UV data unavailable
+            </p>
+        `;
+
+        return;
+    }
+
+
+    const category =
+        uvData.category || 'Unknown';
+
+    const peakTime =
+        uvData.peak_time || '--';
+
+    const peakValue =
+        uvData.peak_value !== null &&
+        uvData.peak_value !== undefined
+            ? Number(uvData.peak_value).toFixed(1)
+            : '--';
+
+    const recommendation =
+        uvData.recommendation ||
+        'Use appropriate sun protection.';
+
+
+    // 0–12+ mapped to 0–360 degrees
+    const gaugePercent =
+        Math.min(Math.max(uv, 0), 12) / 12;
+
+    const gaugeAngle =
+        Math.round(gaugePercent * 360);
+
+    const gaugeColor =
+        uvData.color || '#3b82f6';
+
+
+    container.innerHTML = `
+
+        <div class="flex flex-col h-full">
+
+            <!-- Header / Gauge -->
+            <div class="flex items-center justify-between gap-4">
+
+                <!-- Circular Gauge -->
+                <div
+                    class="relative w-28 h-28 rounded-full shrink-0 flex items-center justify-center"
+                    style="
+                        background:
+                        conic-gradient(
+                            ${gaugeColor} ${gaugeAngle}deg,
+                            #262a40 ${gaugeAngle}deg 360deg
+                        );
+                    "
+                >
+
+                    <div
+                        class="absolute inset-[8px] rounded-full bg-[#1b1f30] flex flex-col items-center justify-center"
+                    >
+
+                        <span class="text-[10px] text-gray-400 uppercase tracking-wide">
+                            UV
+                        </span>
+
+                        <span
+                            class="text-3xl font-extrabold text-white leading-none"
+                        >
+                            ${uv % 1 === 0 ? uv.toFixed(0) : uv.toFixed(1)}
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <!-- Category -->
+                <div class="flex-1 min-w-0">
+
+                    <p
+                        class="text-xs text-gray-500 uppercase tracking-wider"
+                    >
+                        Current Level
+                    </p>
+
+                    <h4
+                        class="text-xl font-bold mt-1"
+                        style="color:${gaugeColor};"
+                    >
+                        ${escapeHtml(category)}
+                    </h4>
+
+                    <p class="text-xs text-gray-400 mt-1">
+                        Peak today:
+                        <span class="text-white font-medium">
+                            ${escapeHtml(peakTime)}
+                        </span>
+                    </p>
+
+                    <p class="text-xs text-gray-500 mt-0.5">
+                        Peak UV:
+                        <span class="text-gray-300 font-medium">
+                            ${peakValue}
+                        </span>
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- UV Scale -->
+            <div class="mt-4">
+
+                <div class="flex justify-between text-[10px] text-gray-500 mb-1">
+                    <span>Low</span>
+                    <span>Moderate</span>
+                    <span>High</span>
+                    <span>Very High</span>
+                    <span>Extreme</span>
+                </div>
+
+                <div class="h-2 rounded-full overflow-hidden bg-[#262a40]">
+                    <div
+                        class="h-full rounded-full transition-all duration-700"
+                        style="
+                            width:${Math.max(
+                                4,
+                                Math.min(100, gaugePercent * 100)
+                            )}%;
+                            background:${gaugeColor};
+                        "
+                    ></div>
+                </div>
+
+            </div>
+
+
+            <!-- Safety Recommendation -->
+            <div
+                class="mt-4 p-3 rounded-xl bg-[#131521] border border-[#262a40]"
+            >
+
+                <div class="flex items-start gap-2">
+
+                    <i
+                        class="fa-solid fa-shield-sun mt-0.5"
+                        style="color:${gaugeColor};"
+                    ></i>
+
+                    <div>
+
+                        <p class="text-[10px] text-gray-500 uppercase tracking-wider">
+                            Safety Recommendation
+                        </p>
+
+                        <p class="text-xs text-gray-300 mt-1 leading-relaxed">
+                            ${escapeHtml(recommendation)}
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    `;
 }
 
 function showForecastDetails(dataStr) {
@@ -2048,6 +2224,428 @@ function showAQIState(type, message = '') {
             <p class="text-[11px] text-gray-500 mt-1 max-w-[230px]">
                 ${escapeHtml(message || 'Please try again after changing the location.')}
             </p>
+        </div>
+    `;
+}
+
+function openWeatherAlerts(event) {
+
+    if (event) {
+        event.preventDefault();
+    }
+
+    // Open dashboard
+    switchTab('dashboard');
+
+    // Close mobile sidebar
+    toggleMobileSidebar(true);
+
+    // Wait for dashboard to become visible
+    setTimeout(() => {
+
+        const alertsSection =
+            document.getElementById('alerts-section');
+
+        if (!alertsSection) {
+            console.error(
+                'Weather Alerts section not found.'
+            );
+            return;
+        }
+
+        alertsSection.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+
+        // Small visual highlight
+        alertsSection.classList.add(
+            'ring-2',
+            'ring-blue-500/50'
+        );
+
+        setTimeout(() => {
+            alertsSection.classList.remove(
+                'ring-2',
+                'ring-blue-500/50'
+            );
+        }, 1800);
+
+    }, 350);
+}
+
+// ==========================================
+// HEAT STRESS INDEX
+// ==========================================
+
+function calculateHeatIndexCelsius(tempC, humidity) {
+
+    const T = (Number(tempC) * 9 / 5) + 32;
+    const RH = Number(humidity);
+
+    if (
+        !Number.isFinite(T) ||
+        !Number.isFinite(RH)
+    ) {
+        return null;
+    }
+
+    // Below the usual heat-index range,
+    // apparent temperature stays close to ambient temperature.
+    if (T < 80) {
+
+        const simpleHI =
+            0.5 * (
+                T +
+                61.0 +
+                ((T - 68.0) * 1.2) +
+                (RH * 0.094)
+            );
+
+        const averagedHI =
+            (simpleHI + T) / 2;
+
+        return (averagedHI - 32) * 5 / 9;
+    }
+
+    let HI =
+        -42.379 +
+        (2.04901523 * T) +
+        (10.14333127 * RH) -
+        (0.22475541 * T * RH) -
+        (0.00683783 * T * T) -
+        (0.05481717 * RH * RH) +
+        (0.00122874 * T * T * RH) +
+        (0.00085282 * T * RH * RH) -
+        (0.00000199 * T * T * RH * RH);
+
+    // Low humidity adjustment
+    if (
+        RH < 13 &&
+        T >= 80 &&
+        T <= 112
+    ) {
+
+        const adjustment =
+            ((13 - RH) / 4) *
+            Math.sqrt(
+                (17 - Math.abs(T - 95)) / 17
+            );
+
+        HI -= adjustment;
+    }
+
+    // High humidity adjustment
+    else if (
+        RH > 85 &&
+        T >= 80 &&
+        T <= 87
+    ) {
+
+        const adjustment =
+            ((RH - 85) / 10) *
+            ((87 - T) / 5);
+
+        HI += adjustment;
+    }
+
+    return (HI - 32) * 5 / 9;
+}
+
+
+function getHeatStressRisk(heatIndexC) {
+
+    if (heatIndexC === null) {
+        return null;
+    }
+
+    if (heatIndexC < 32) {
+
+        return {
+            level: 'Low',
+            color: '#22c55e',
+            icon: 'fa-circle-check',
+            recommendation:
+                'Drink sufficient water and stay hydrated.'
+        };
+    }
+
+    if (heatIndexC < 39) {
+
+        return {
+            level: 'Moderate',
+            color: '#eab308',
+            icon: 'fa-triangle-exclamation',
+            recommendation:
+                'Drink sufficient water and take regular breaks.'
+        };
+    }
+
+    if (heatIndexC < 41) {
+
+        return {
+            level: 'High',
+            color: '#f97316',
+            icon: 'fa-temperature-high',
+            recommendation:
+                'Avoid prolonged outdoor activity during peak heat and take frequent breaks.'
+        };
+    }
+
+    return {
+        level: 'Extreme',
+        color: '#ef4444',
+        icon: 'fa-circle-exclamation',
+        recommendation:
+            'Avoid prolonged outdoor activity, stay hydrated and remain in a cool or shaded place.'
+    };
+}
+
+
+function renderHeatStress(
+    temperature,
+    feelsLike,
+    humidity
+) {
+
+    const container =
+        document.getElementById(
+            'heat-stress-container'
+        );
+
+    if (!container) {
+        return;
+    }
+
+
+    const tempC =
+        Number(temperature);
+
+    const feelsLikeC =
+        Number(feelsLike);
+
+    const humidityValue =
+        Number(humidity);
+
+
+    // Missing data
+    if (
+        !Number.isFinite(tempC) ||
+        !Number.isFinite(humidityValue)
+    ) {
+
+        container.innerHTML = `
+            <div class="p-3 rounded-xl bg-[#131521] border border-[#262a40]">
+
+                <div class="flex items-center gap-2 text-orange-400">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+
+                    <span class="text-sm font-medium">
+                        Heat stress data unavailable
+                    </span>
+                </div>
+
+                <p class="text-xs text-gray-500 mt-1">
+                    Temperature or humidity data is missing.
+                </p>
+
+            </div>
+        `;
+
+        return;
+    }
+
+
+    const heatIndex =
+        calculateHeatIndexCelsius(
+            tempC,
+            humidityValue
+        );
+
+
+    if (heatIndex === null) {
+
+        container.innerHTML = `
+            <p class="text-sm text-gray-400">
+                Heat stress calculation unavailable.
+            </p>
+        `;
+
+        return;
+    }
+
+
+    const risk =
+        getHeatStressRisk(heatIndex);
+
+
+    if (!risk) {
+        return;
+    }
+
+
+    const safeHeatIndex =
+        heatIndex.toFixed(1);
+
+    const safeTemperature =
+        tempC.toFixed(1);
+
+    const safeFeelsLike =
+        Number.isFinite(feelsLikeC)
+            ? feelsLikeC.toFixed(1)
+            : '--';
+
+    const safeHumidity =
+        humidityValue.toFixed(0);
+
+
+    // Gauge: map 20–50°C to 0–100%
+    const gaugePercent =
+        Math.min(
+            100,
+            Math.max(
+                5,
+                ((heatIndex - 20) / 30) * 100
+            )
+        );
+
+
+    container.innerHTML = `
+
+        <!-- Main Heat Index -->
+        <div class="flex items-center justify-between gap-4">
+
+            <!-- Circular indicator -->
+            <div
+                class="relative w-24 h-24 rounded-full shrink-0 flex items-center justify-center"
+                style="
+                    background:
+                    conic-gradient(
+                        ${risk.color} ${gaugePercent}%,
+                        #262a40 ${gaugePercent}% 100%
+                    );
+                "
+            >
+
+                <div
+                    class="absolute inset-[7px] rounded-full bg-[#1b1f30] flex flex-col items-center justify-center"
+                >
+
+                    <span class="text-[9px] text-gray-500 uppercase">
+                        Heat Index
+                    </span>
+
+                    <span class="text-2xl font-extrabold text-white">
+                        ${safeHeatIndex}°
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <!-- Risk -->
+            <div class="flex-1">
+
+                <p class="text-xs text-gray-500 uppercase tracking-wider">
+                    Risk Level
+                </p>
+
+                <div class="flex items-center gap-2 mt-1">
+
+                    <i
+                        class="fa-solid ${risk.icon}"
+                        style="color:${risk.color};"
+                    ></i>
+
+                    <span
+                        class="font-bold text-lg"
+                        style="color:${risk.color};"
+                    >
+                        ${risk.level}
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Metrics -->
+        <div class="grid grid-cols-3 gap-2 mt-4">
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-2.5 text-center">
+
+                <p class="text-[10px] text-gray-500">
+                    Temperature
+                </p>
+
+                <p class="text-sm font-bold text-white mt-1">
+                    ${safeTemperature}°C
+                </p>
+
+            </div>
+
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-2.5 text-center">
+
+                <p class="text-[10px] text-gray-500">
+                    Feels Like
+                </p>
+
+                <p class="text-sm font-bold text-white mt-1">
+                    ${safeFeelsLike}°C
+                </p>
+
+            </div>
+
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-2.5 text-center">
+
+                <p class="text-[10px] text-gray-500">
+                    Humidity
+                </p>
+
+                <p class="text-sm font-bold text-white mt-1">
+                    ${safeHumidity}%
+                </p>
+
+            </div>
+
+        </div>
+
+
+        <!-- Recommendation -->
+        <div
+            class="mt-4 p-3 rounded-xl border"
+            style="
+                border-color:${risk.color}55;
+                background:${risk.color}10;
+            "
+        >
+
+            <div class="flex items-start gap-2">
+
+                <i
+                    class="fa-solid fa-shield-heart mt-0.5"
+                    style="color:${risk.color};"
+                ></i>
+
+                <div>
+
+                    <p class="text-[10px] text-gray-500 uppercase tracking-wider">
+                        Safety Recommendation
+                    </p>
+
+                    <p class="text-xs text-gray-300 mt-1 leading-relaxed">
+                        ${escapeHtml(risk.recommendation)}
+                    </p>
+
+                </div>
+
+            </div>
+
         </div>
     `;
 }

@@ -10,6 +10,8 @@
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        /* Prevent combined UV + Heat Stress content from overflowing its grid item. */
+        #uv-container, #heat-stress-container { min-width: 0; }
     </style>
 </head>
 <body class="bg-[#131521] flex h-screen font-sans overflow-hidden text-gray-300">
@@ -39,57 +41,174 @@
 
         <!-- TAB 1: MAIN DASHBOARD VIEW -->
         <div id="tab-dashboard" class="tab-content">
-            <div class="w-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 mb-8">
+            <div class="w-full max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 mb-8 items-start">
+<!-- Weather Card -->
+<div class="w-full lg:w-[400px] shrink-0 lg:sticky lg:top-6 lg:self-start">
 
-                <!-- Weather Card -->
-                <div class="w-full lg:w-[400px] shrink-0">
-                    <div class="bg-[#1b1f30] p-8 rounded-3xl shadow-xl w-full border border-[#262a40]">
-                        <div class="flex space-x-2 mb-6">
-                            <input type="text" id="city" placeholder="Search city (e.g., Mahesana)..." 
-                                class="w-full px-4 py-3 bg-[#131521] text-white border border-[#262a40] rounded-xl focus:outline-none focus:border-blue-500 transition">
-                            <button id="search-btn" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-xl font-medium transition-colors shadow-lg">
-                                <i class="fa-solid fa-magnifying-glass"></i>
-                            </button>
-                            <button id="location-btn" title="Use My Location" class="bg-[#262a40] hover:bg-[#32364a] text-blue-400 px-4 py-3 rounded-xl font-medium transition-colors shadow-lg">
-                                <i class="fa-solid fa-location-crosshairs"></i>
-                            </button>
-                        </div>
+    <div class="bg-[#1b1f30] p-8 rounded-3xl shadow-xl w-full border border-[#262a40]">
 
-                        <div class="text-center mt-6">
-                            <div class="flex items-center justify-center gap-3">
-                                <h2 class="text-2xl font-bold text-white" id="city-name">City Name</h2>
-                                <button id="favorite-btn" class="text-gray-500 hover:text-yellow-400 transition text-xl hidden">
-                                    <i class="fa-regular fa-star" id="favorite-icon"></i>
-                                </button>
-                            </div>
-                            <p class="text-blue-400 font-medium capitalize mt-1" id="weather-desc">Clear Sky</p>
+        <!-- Search -->
+        <div class="flex space-x-2 mb-6">
 
-                            <div class="my-6 flex flex-col items-center">
-                                <img id="weather-icon" src="https://openweathermap.org/img/wn/02d@4x.png" alt="weather icon" class="w-28 h-28 sm:w-32 sm:h-32 -mb-2 drop-shadow-lg">
-                                <span class="text-6xl sm:text-7xl font-bold text-white tracking-tighter" id="temp">25°</span>
-                                <p class="text-gray-400 mt-2 text-sm font-medium hidden" id="feels-like-container">Feels like <span id="feels-like-temp"></span>°C</p>
-                            </div>
+            <input
+                type="text"
+                id="city"
+                placeholder="Search city (e.g., Mahesana)..."
+                class="w-full px-4 py-3 bg-[#131521] text-white border border-[#262a40] rounded-xl focus:outline-none focus:border-blue-500 transition"
+            >
 
-                            <div class="grid grid-cols-3 gap-2 sm:gap-4 text-gray-400 mt-6 border-t border-[#262a40] pt-6 px-1 sm:px-4">
-                                <div class="flex flex-col items-center">
-                                    <i class="fa-solid fa-droplet text-blue-500 mb-2 text-xl"></i>
-                                    <p class="text-xs sm:text-sm font-medium">Humidity</p>
-                                    <p class="font-bold text-white mt-1 text-sm sm:text-base" id="humidity">60%</p>
-                                </div>
-                                <div class="flex flex-col items-center">
-                                    <i class="fa-solid fa-wind text-gray-400 mb-2 text-xl"></i>
-                                    <p class="text-xs sm:text-sm font-medium">Wind</p>
-                                    <p class="font-bold text-white mt-1 text-sm sm:text-base" id="wind">5 km/h</p>
-                                </div>
-                                <div class="flex flex-col items-center">
-                                    <i class="fa-solid fa-gauge text-gray-400 mb-2 text-xl"></i>
-                                    <p class="text-xs sm:text-sm font-medium">Pressure</p>
-                                    <p class="font-bold text-white mt-1 text-sm sm:text-base" id="pressure">1013 hPa</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+            <button
+                id="search-btn"
+                type="button"
+                class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-xl font-medium transition-colors shadow-lg"
+            >
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+
+            <button
+                id="location-btn"
+                type="button"
+                title="Use My Location"
+                class="bg-[#262a40] hover:bg-[#32364a] text-blue-400 px-4 py-3 rounded-xl font-medium transition-colors shadow-lg"
+            >
+                <i class="fa-solid fa-location-crosshairs"></i>
+            </button>
+
+        </div>
+
+
+        <!-- Current Weather -->
+        <div class="text-center mt-6">
+
+            <!-- City + Favorite -->
+            <div class="flex items-center justify-center gap-3">
+
+                <h2
+                    class="text-2xl font-bold text-white"
+                    id="city-name"
+                >
+                    City Name
+                </h2>
+
+                <button
+                    id="favorite-btn"
+                    type="button"
+                    class="text-gray-500 hover:text-yellow-400 transition text-xl hidden"
+                >
+                    <i
+                        class="fa-regular fa-star"
+                        id="favorite-icon"
+                    ></i>
+                </button>
+
+            </div>
+
+
+            <!-- Description -->
+            <p
+                class="text-blue-400 font-medium capitalize mt-1"
+                id="weather-desc"
+            >
+                Clear Sky
+            </p>
+
+
+            <!-- Temperature -->
+            <div class="my-6 flex flex-col items-center">
+
+                <img
+                    id="weather-icon"
+                    src="https://openweathermap.org/img/wn/02d@4x.png"
+                    alt="weather icon"
+                    class="w-28 h-28 sm:w-32 sm:h-32 -mb-2 drop-shadow-lg"
+                >
+
+                <span
+                    class="text-6xl sm:text-7xl font-bold text-white tracking-tighter"
+                    id="temp"
+                >
+                    25°
+                </span>
+
+                <p
+                    class="text-gray-400 mt-2 text-sm font-medium hidden"
+                    id="feels-like-container"
+                >
+                    Feels like
+                    <span id="feels-like-temp"></span>°C
+                </p>
+
+            </div>
+
+
+            <!-- Weather Metrics -->
+            <div
+                class="grid grid-cols-3 gap-2 sm:gap-4 text-gray-400 mt-6 border-t border-[#262a40] pt-6 px-1 sm:px-4"
+            >
+
+                <!-- Humidity -->
+                <div class="flex flex-col items-center">
+
+                    <i class="fa-solid fa-droplet text-blue-500 mb-2 text-xl"></i>
+
+                    <p class="text-xs sm:text-sm font-medium">
+                        Humidity
+                    </p>
+
+                    <p
+                        class="font-bold text-white mt-1 text-sm sm:text-base"
+                        id="humidity"
+                    >
+                        60%
+                    </p>
+
                 </div>
+
+
+                <!-- Wind -->
+                <div class="flex flex-col items-center">
+
+                    <i class="fa-solid fa-wind text-gray-400 mb-2 text-xl"></i>
+
+                    <p class="text-xs sm:text-sm font-medium">
+                        Wind
+                    </p>
+
+                    <p
+                        class="font-bold text-white mt-1 text-sm sm:text-base"
+                        id="wind"
+                    >
+                        5 km/h
+                    </p>
+
+                </div>
+
+
+                <!-- Pressure -->
+                <div class="flex flex-col items-center">
+
+                    <i class="fa-solid fa-gauge text-gray-400 mb-2 text-xl"></i>
+
+                    <p class="text-xs sm:text-sm font-medium">
+                        Pressure
+                    </p>
+
+                    <p
+                        class="font-bold text-white mt-1 text-sm sm:text-base"
+                        id="pressure"
+                    >
+                        1013 hPa
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
 
                 <!-- Extended Metrics Grid -->
                 <div id="extended-features" class="flex-1 flex flex-col gap-6 hidden">
@@ -111,10 +230,44 @@
                                 <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-solid fa-umbrella mr-2"></i> Rain Probability</h3>
                                 <div id="rain-container" class="flex overflow-x-auto scrollbar-hide gap-6 pb-2 snap-x"></div>
                             </div>
-                            <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl flex-1">
-                                <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-regular fa-sun mr-2"></i> UV Index</h3>
-                                <div id="uv-container" class="h-full flex flex-col justify-center pb-2"></div>
-                            </div>
+                            <!-- UV Index + Heat Stress -->
+<div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl flex-1 min-h-[650px] h-auto">
+
+    <!-- UV Index -->
+    <div>
+        <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider">
+            <i class="fa-regular fa-sun mr-2"></i> UV Index
+        </h3>
+
+        <div id="uv-container" class="flex flex-col justify-center pb-4">
+            <p class="text-sm text-gray-400">
+                Loading UV data...
+            </p>
+        </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="border-t border-[#262a40] my-5"></div>
+
+    <!-- Heat Stress -->
+    <div>
+        <h3 class="text-gray-400 font-semibold mb-4 text-sm uppercase tracking-wider">
+            <i class="fa-solid fa-temperature-high mr-2"></i> Heat Stress Index
+        </h3>
+
+        <div id="heat-stress-container">
+
+            <div class="flex items-center gap-2 text-gray-400">
+                <i class="fa-solid fa-spinner fa-spin text-blue-400"></i>
+                <span class="text-sm">
+                    Calculating heat stress...
+                </span>
+            </div>
+
+        </div>
+    </div>
+
+</div>
                         </div>
                     </div>
 

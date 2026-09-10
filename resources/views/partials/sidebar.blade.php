@@ -10,10 +10,23 @@
             <i class="fa-solid fa-chart-line w-5 text-center"></i><span>Historical Weather</span>
             <span class="ml-auto bg-[#32364a] text-white text-[10px] px-2 py-0.5 rounded-full">New</span>
         </a>
-        <a href="#" id="sidebar-alerts-btn" class="flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition">
-            <i class="fa-solid fa-triangle-exclamation w-5 text-center"></i><span>Weather alerts</span>
-            <span id="sidebar-alerts-badge" class="ml-auto bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full hidden">0</span>
-        </a>
+        <a
+    href="#alerts-section"
+    onclick="openWeatherAlerts(event)"
+    class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition"
+    id="sidebar-alerts-btn"
+>
+    <i class="fa-solid fa-triangle-exclamation w-5 text-center"></i>
+
+    <span>Weather alerts</span>
+
+    <span
+        id="sidebar-alerts-badge"
+        class="ml-auto bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full hidden"
+    >
+        0
+    </span>
+</a>
         <a href="#" onclick="switchTab('ai'); toggleMobileSidebar(true)" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-ai">
             <i class="fa-solid fa-robot w-5 text-center"></i><span>Ask meteorologist</span>
         </a>

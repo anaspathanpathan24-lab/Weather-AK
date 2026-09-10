@@ -37,7 +37,7 @@ class WeatherController extends Controller
             return response()->json([
                 'current' => $currentData,
                 'forecast' => $forecastResponse->successful() ? $forecastResponse->json() : null,
-                'uv' => ['value' => 6],
+                'uv' => $this->getUvIndex($lat, $lon),
             ]);
         } catch (\Exception $e) {
             Log::error('Weather API exception: ' . $e->getMessage());
@@ -45,6 +45,211 @@ class WeatherController extends Controller
             return response()->json(['error' => 'Server error occurred.'], 500);
         }
     }
+
+    /**
+ * Get dynamic UV Index for the selected location.
+ *
+ * Uses Open-Meteo hourly UV data so the frontend can show:
+ * - Current UV Index
+ * - Category
+ * - Peak UV time
+ * - Health recommendation
+ */
+private function getUvIndex(float $lat, float $lon): array
+{
+    try {
+        $response = Http::timeout(8)->get(
+            'https://api.open-meteo.com/v1/forecast',
+            [
+                'latitude' => $lat,
+                'longitude' => $lon,
+                'hourly' => 'uv_index',
+                'forecast_days' => 2,
+                'timezone' => 'auto',
+            ]
+        );
+
+        if (!$response->successful()) {
+            return [
+                'available' => false,
+                'error' => 'UV data is currently unavailable.',
+            ];
+        }
+
+        $data = $response->json();
+
+        $times = $data['hourly']['time'] ?? [];
+        $uvValues = $data['hourly']['uv_index'] ?? [];
+        $timezone = $data['timezone'] ?? 'UTC';
+
+        if (empty($times) || empty($uvValues)) {
+            return [
+                'available' => false,
+                'error' => 'No UV data available for this location.',
+            ];
+        }
+
+        $now = new \DateTimeImmutable(
+            'now',
+            new \DateTimeZone($timezone)
+        );
+
+        $currentDate = $now->format('Y-m-d');
+
+        $currentIndex = 0;
+        $smallestDifference = PHP_INT_MAX;
+
+        $peakIndex = null;
+        $peakValue = -1;
+
+        foreach ($times as $index => $time) {
+            if (!isset($uvValues[$index]) || $uvValues[$index] === null) {
+                continue;
+            }
+
+            $value = (float) $uvValues[$index];
+
+            try {
+                $dateTime = new \DateTimeImmutable(
+                    $time,
+                    new \DateTimeZone($timezone)
+                );
+            } catch (\Exception $e) {
+                continue;
+            }
+
+            // Find closest hourly value to current local time.
+            $difference = abs(
+                $dateTime->getTimestamp() - $now->getTimestamp()
+            );
+
+            if ($difference < $smallestDifference) {
+                $smallestDifference = $difference;
+                $currentIndex = $index;
+            }
+
+            // Find today's peak UV.
+            if (
+                $dateTime->format('Y-m-d') === $currentDate &&
+                $value > $peakValue
+            ) {
+                $peakValue = $value;
+                $peakIndex = $index;
+            }
+        }
+
+        $currentUv = isset($uvValues[$currentIndex])
+            ? (float) $uvValues[$currentIndex]
+            : null;
+
+        if ($currentUv === null) {
+            return [
+                'available' => false,
+                'error' => 'Current UV data is unavailable.',
+            ];
+        }
+
+        $currentUv = round($currentUv, 1);
+
+        $category = $this->getUvCategory($currentUv);
+
+        $peakTime = null;
+
+        if ($peakIndex !== null && isset($times[$peakIndex])) {
+            try {
+                $peakDateTime = new \DateTimeImmutable(
+                    $times[$peakIndex],
+                    new \DateTimeZone($timezone)
+                );
+
+                $peakTime = $peakDateTime->format('g:i A');
+            } catch (\Exception $e) {
+                $peakTime = null;
+            }
+        }
+
+        return [
+            'available' => true,
+            'value' => $currentUv,
+            'category' => $category['name'],
+            'level' => $category['level'],
+            'color' => $category['color'],
+            'recommendation' => $category['recommendation'],
+            'peak_value' => $peakValue >= 0
+                ? round($peakValue, 1)
+                : null,
+            'peak_time' => $peakTime,
+            'timezone' => $timezone,
+            'updated_at' => $now->format('Y-m-d H:i:s'),
+        ];
+
+    } catch (\Throwable $e) {
+
+        \Illuminate\Support\Facades\Log::warning(
+            'UV API error: ' . $e->getMessage()
+        );
+
+        return [
+            'available' => false,
+            'error' => 'Unable to load UV data right now.',
+        ];
+    }
+}
+
+
+/**
+ * Standard UV categories.
+ */
+private function getUvCategory(float $uv): array
+{
+    if ($uv <= 2) {
+        return [
+            'name' => 'Low',
+            'level' => 'low',
+            'color' => '#22c55e',
+            'recommendation' =>
+                'Low UV risk. Normal outdoor activity is generally fine.'
+        ];
+    }
+
+    if ($uv <= 5) {
+        return [
+            'name' => 'Moderate',
+            'level' => 'moderate',
+            'color' => '#eab308',
+            'recommendation' =>
+                'Protection is recommended, especially around midday.'
+        ];
+    }
+
+    if ($uv <= 7) {
+        return [
+            'name' => 'High',
+            'level' => 'high',
+            'color' => '#f97316',
+            'recommendation' =>
+                'Use sunscreen, protective clothing and seek shade around midday.'
+        ];
+    }
+
+    if ($uv <= 10) {
+        return [
+            'name' => 'Very High',
+            'level' => 'very-high',
+            'color' => '#ef4444',
+            'recommendation' =>
+                'Extra protection is essential. Avoid prolonged midday sun.'
+        ];
+    }
+
+    return [
+        'name' => 'Extreme',
+        'level' => 'extreme',
+        'color' => '#a855f7',
+        'recommendation' =>
+            'Extreme UV risk. Avoid midday sun and use full sun protection.'
+    ];
+}
 
     /**
      * Return real historical weather statistics for a Gujarat district.
