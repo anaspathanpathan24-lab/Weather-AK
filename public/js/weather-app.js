@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderFavorites();
     populateHistoricalDropdowns();
     initInteractiveMap();
+    initFarmerAdvisory();
     fetchWeatherData('/api/weather?city=Mahesana');
 });
 
@@ -460,102 +461,25 @@ function updateDashboardUI(data) {
        Number(data?.uv?.value)
     );
 
-        const activeAlerts = [];
+    const farmerCity =
+    document.getElementById('farmer-city')?.value;
 
-        if (maxTemp >= 42) {
-            activeAlerts.push({
-                icon: 'fa-temperature-arrow-up',
-                color: 'text-red-500',
-                bg: 'bg-red-500/10 border-red-500/30',
-                title: 'Extreme Heat Warning',
-                desc: 'Temperatures have reached dangerous levels. Avoid prolonged outdoor exposure.'
-            });
-        }
-        else if (maxTemp >= 38) {
-            activeAlerts.push({
-                icon: 'fa-temperature-half',
-                color: 'text-orange-500',
-                bg: 'bg-orange-500/10 border-orange-500/30',
-                title: 'High Temperature',
-                desc: `Temperature is extremely high (${Math.round(maxTemp)}°C). Stay hydrated.`
-            });
-        }
+const farmerCrop =
+    document.getElementById('farmer-crop')?.value;
 
-        if (hasHeavyRain) {
-            activeAlerts.push({
-                icon: 'fa-cloud-showers-heavy',
-                color: 'text-blue-400',
-                bg: 'bg-blue-500/10 border-blue-500/30',
-                title: 'Heavy Rainfall / Storm',
-                desc: 'Heavy rain or thunderstorms are expected in this area soon.'
-            });
-        }
-
-        if (windSpeed >= 10) {
-            activeAlerts.push({
-                icon: 'fa-wind',
-                color: 'text-gray-300',
-                bg: 'bg-gray-500/20 border-gray-500/40',
-                title: 'Strong Winds',
-                desc: `High wind speeds detected (${Math.round(windSpeed)} km/h).`
-            });
-        }
-
-        const currentUvValue = Number(data?.uv?.value);
-
-    if (Number.isFinite(currentUvValue) && currentUvValue >= 8) {
-            activeAlerts.push({
-                icon: 'fa-sun',
-                color: 'text-yellow-500',
-                bg: 'bg-yellow-500/10 border-yellow-500/30',
-                title: 'Dangerous UV Levels',
-                desc: 'UV Index is exceptionally high. Protect your skin and eyes.'
-            });
-        }
-
-        alertsContainer.innerHTML = '';
-
-        if (activeAlerts.length > 0) {
-            if (alertBadge) {
-                alertBadge.innerText = activeAlerts.length;
-                alertBadge.classList.remove('hidden');
-            }
-
-            activeAlerts.forEach(alert => {
-                alertsContainer.innerHTML += `
-                    <div class="p-4 rounded-xl border ${alert.bg} flex gap-4 items-start">
-                        <i class="fa-solid ${alert.icon} ${alert.color} text-xl mt-1"></i>
-
-                        <div>
-                            <h4 class="font-bold ${alert.color} text-sm">
-                                ${alert.title}
-                            </h4>
-
-                            <p class="text-xs text-gray-300 mt-1">
-                                ${alert.desc}
-                            </p>
-                        </div>
-                    </div>
-                `;
-            });
-
-        } else {
-            if (alertBadge) {
-                alertBadge.classList.add('hidden');
-            }
-
-            alertsContainer.innerHTML = `
-                <div class="p-4 rounded-xl border border-green-500/30 bg-green-500/10 flex items-center gap-3">
-                    <i class="fa-solid fa-circle-check text-green-400 text-lg"></i>
-
-                    <span class="text-sm text-green-400 font-medium">
-                        No active weather alerts for this location.
-                    </span>
-                </div>
-            `;
-        }
-    }
+if (
+    farmerCity &&
+    farmerCrop &&
+    farmerCity.toLowerCase() ===
+        String(current?.name || '').toLowerCase()
+) {
+    renderFarmerAdvisory(
+        data,
+        farmerCrop
+    );
 }
+
+ }
 
  // ==========================================
 // DYNAMIC UV INDEX
@@ -1542,11 +1466,6 @@ function escapeHtml(value) {
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
 }
-
-// ==========================================
-// FAVORITES
-// ==========================================
-
 // ==========================================
 // FAVORITES
 // ==========================================
@@ -3205,6 +3124,676 @@ function renderHeatStress(
 
                 </div>
 
+            </div>
+
+        </div>
+     `;
+
+    }
+
+    // ==========================================
+// FARMER WEATHER ADVISORY
+// ==========================================
+
+const farmerCrops = [
+    "Wheat",
+    "Cotton",
+    "Groundnut",
+    "Bajra",
+    "Cumin",
+    "Castor",
+    "Mustard",
+    "Potato",
+    "Onion"
+];
+
+const farmerCropProfiles = {
+
+    Wheat: {
+        irrigationTemp: 18,
+        heatStress: 32,
+        wetHumidity: 80,
+        sprayWind: 15
+    },
+
+    Cotton: {
+        irrigationTemp: 30,
+        heatStress: 38,
+        wetHumidity: 82,
+        sprayWind: 15
+    },
+
+    Groundnut: {
+        irrigationTemp: 30,
+        heatStress: 36,
+        wetHumidity: 80,
+        sprayWind: 14
+    },
+
+    Bajra: {
+        irrigationTemp: 32,
+        heatStress: 38,
+        wetHumidity: 82,
+        sprayWind: 16
+    },
+
+    Cumin: {
+        irrigationTemp: 24,
+        heatStress: 30,
+        wetHumidity: 75,
+        sprayWind: 12
+    },
+
+    Castor: {
+        irrigationTemp: 31,
+        heatStress: 37,
+        wetHumidity: 82,
+        sprayWind: 15
+    },
+
+    Mustard: {
+        irrigationTemp: 22,
+        heatStress: 30,
+        wetHumidity: 78,
+        sprayWind: 14
+    },
+
+    Potato: {
+        irrigationTemp: 24,
+        heatStress: 30,
+        wetHumidity: 80,
+        sprayWind: 14
+    },
+
+    Onion: {
+        irrigationTemp: 27,
+        heatStress: 32,
+        wetHumidity: 80,
+        sprayWind: 14
+    }
+};
+
+
+function initFarmerAdvisory() {
+
+    const citySelect =
+        document.getElementById('farmer-city');
+
+    const cropSelect =
+        document.getElementById('farmer-crop');
+
+    if (!citySelect || !cropSelect) {
+        return;
+    }
+
+    // Districts
+    citySelect.innerHTML = `
+        <option value="">Select District</option>
+    `;
+
+    gujaratDistricts.forEach(district => {
+
+        const option =
+            document.createElement('option');
+
+        option.value = district;
+        option.textContent = district;
+
+        citySelect.appendChild(option);
+    });
+
+    // Crops
+    cropSelect.innerHTML = `
+        <option value="">Select Crop</option>
+    `;
+
+    farmerCrops.forEach(crop => {
+
+        const option =
+            document.createElement('option');
+
+        option.value = crop;
+        option.textContent = crop;
+
+        cropSelect.appendChild(option);
+    });
+
+    // Default current city
+    if (currentActiveCity) {
+        citySelect.value = currentActiveCity;
+    } else {
+        citySelect.value = 'Mahesana';
+    }
+
+    cropSelect.value = 'Wheat';
+
+    citySelect.addEventListener(
+        'change',
+        async () => {
+
+            const city =
+                citySelect.value;
+
+            if (!city) return;
+
+            const cached =
+                liveDashboardCache[city];
+
+            if (cached) {
+                renderFarmerAdvisory(
+                    cached,
+                    cropSelect.value
+                );
+                return;
+            }
+
+            const content =
+                document.getElementById(
+                    'farmer-advisory-content'
+                );
+
+            if (content) {
+                content.innerHTML = `
+                    <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-400">
+                        <i class="fa-solid fa-spinner fa-spin text-blue-400 mr-2"></i>
+                        Loading weather data for ${escapeHtml(city)}...
+                    </div>
+                `;
+            }
+
+            await fetchWeatherData(
+                `/api/weather?city=${encodeURIComponent(city)}`
+            );
+
+            const latest =
+                liveDashboardCache[city];
+
+            if (latest) {
+                renderFarmerAdvisory(
+                    latest,
+                    cropSelect.value
+                );
+            }
+        }
+    );
+
+    cropSelect.addEventListener(
+        'change',
+        () => {
+
+            const city =
+                citySelect.value;
+
+            const crop =
+                cropSelect.value;
+
+            if (!city || !crop) return;
+
+            const data =
+                liveDashboardCache[city];
+
+            if (data) {
+                renderFarmerAdvisory(
+                    data,
+                    crop
+                );
+            }
+        }
+    );
+
+    // Initial advisory
+    const initialData =
+        liveDashboardCache[currentActiveCity];
+
+    if (initialData) {
+        renderFarmerAdvisory(
+            initialData,
+            'Wheat'
+        );
+    }
+}
+
+
+function renderFarmerAdvisory(
+    data,
+    crop
+) {
+
+    const content =
+        document.getElementById(
+            'farmer-advisory-content'
+        );
+
+    if (!content) return;
+
+    if (!crop) {
+
+        content.innerHTML = `
+            <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-500">
+                Please select a crop.
+            </div>
+        `;
+
+        return;
+    }
+
+    const current =
+        data?.current
+            ? data.current
+            : data;
+
+    const profile =
+        farmerCropProfiles[crop];
+
+    if (
+        !current ||
+        !profile
+    ) {
+
+        content.innerHTML = `
+            <div class="p-4 rounded-xl bg-[#131521] border border-red-500/20 text-red-400">
+                Weather data is unavailable for this advisory.
+            </div>
+        `;
+
+        return;
+    }
+
+    const temperature =
+        Number(current?.main?.temp);
+
+    const humidity =
+        Number(current?.main?.humidity);
+
+    const wind =
+        Number(current?.wind?.speed);
+
+    const forecastList =
+        data?.forecast?.list || [];
+
+    const rainProbability =
+        forecastList.length
+            ? Math.max(
+                ...forecastList
+                    .slice(0, 6)
+                    .map(item =>
+                        Number(item?.pop || 0)
+                    )
+              )
+            : 0;
+
+    const weatherMain =
+        String(
+            current?.weather?.[0]?.main || ''
+        ).toLowerCase();
+
+    const isRain =
+        weatherMain.includes('rain') ||
+        weatherMain.includes('thunder');
+
+    // ------------------------------------------
+    // STATUS CALCULATION
+    // ------------------------------------------
+
+    let riskScore = 0;
+
+    if (
+        rainProbability >= 0.70 ||
+        isRain
+    ) {
+        riskScore += 2;
+    }
+
+    if (
+        Number.isFinite(temperature) &&
+        temperature >= profile.heatStress
+    ) {
+        riskScore += 2;
+    }
+
+    if (
+        Number.isFinite(humidity) &&
+        humidity >= profile.wetHumidity
+    ) {
+        riskScore += 1;
+    }
+
+    if (
+        Number.isFinite(wind) &&
+        wind >= profile.sprayWind
+    ) {
+        riskScore += 1;
+    }
+
+    let status =
+        'Good';
+
+    let statusColor =
+        'text-green-400';
+
+    let statusBg =
+        'bg-green-500/10 border-green-500/30';
+
+    if (riskScore >= 4) {
+
+        status = 'Risk';
+
+        statusColor =
+            'text-red-400';
+
+        statusBg =
+            'bg-red-500/10 border-red-500/30';
+
+    } else if (riskScore >= 2) {
+
+        status = 'Caution';
+
+        statusColor =
+            'text-yellow-400';
+
+        statusBg =
+            'bg-yellow-500/10 border-yellow-500/30';
+    }
+
+    // ------------------------------------------
+    // IRRIGATION
+    // ------------------------------------------
+
+    let irrigation =
+        'Normal irrigation planning is reasonable.';
+
+    if (
+        rainProbability >= 0.70 ||
+        isRain
+    ) {
+
+        irrigation =
+            'Rain is likely. Consider delaying irrigation to avoid unnecessary watering.';
+
+    } else if (
+        Number.isFinite(temperature) &&
+        temperature >= profile.irrigationTemp
+    ) {
+
+        irrigation =
+            'Warm conditions may increase water demand. Check soil moisture before irrigation.';
+
+    }
+
+    // ------------------------------------------
+    // RAIN RISK
+    // ------------------------------------------
+
+    let rainRisk =
+        'Low';
+
+    let rainColor =
+        'text-green-400';
+
+    if (rainProbability >= 0.85) {
+
+        rainRisk =
+            'High';
+
+        rainColor =
+            'text-red-400';
+
+    } else if (
+        rainProbability >= 0.70
+    ) {
+
+        rainRisk =
+            'Moderate';
+
+        rainColor =
+            'text-yellow-400';
+    }
+
+    // ------------------------------------------
+    // TEMPERATURE STRESS
+    // ------------------------------------------
+
+    let temperatureStress =
+        'Low';
+
+    let tempColor =
+        'text-green-400';
+
+    if (
+        Number.isFinite(temperature) &&
+        temperature >= profile.heatStress
+    ) {
+
+        temperatureStress =
+            'High';
+
+        tempColor =
+            'text-red-400';
+
+    } else if (
+        Number.isFinite(temperature) &&
+        temperature >= profile.heatStress - 3
+    ) {
+
+        temperatureStress =
+            'Moderate';
+
+        tempColor =
+            'text-yellow-400';
+    }
+
+    // ------------------------------------------
+    // CROP PROTECTION
+    // ------------------------------------------
+
+    let protection =
+        'Continue normal field monitoring.';
+
+    if (
+        rainProbability >= 0.70
+    ) {
+
+        protection =
+            'Monitor fields for waterlogging, fungal pressure and excess moisture after rain.';
+
+    } else if (
+        Number.isFinite(temperature) &&
+        temperature >= profile.heatStress
+    ) {
+
+        protection =
+            'Protect the crop from heat stress and monitor for signs of moisture loss.';
+
+    } else if (
+        Number.isFinite(humidity) &&
+        humidity >= profile.wetHumidity
+    ) {
+
+        protection =
+            'High humidity may increase disease pressure. Inspect crop regularly.';
+
+    }
+
+    // ------------------------------------------
+    // SPRAYING SUITABILITY
+    // ------------------------------------------
+
+    let spraying =
+        'Generally suitable based on current weather.';
+
+    let sprayColor =
+        'text-green-400';
+
+    if (
+        isRain ||
+        rainProbability >= 0.70
+    ) {
+
+        spraying =
+            'Not suitable now because rain is likely.';
+
+        sprayColor =
+            'text-red-400';
+
+    } else if (
+        Number.isFinite(wind) &&
+        wind >= profile.sprayWind
+    ) {
+
+        spraying =
+            'Use caution: wind is relatively strong for spraying.';
+
+        sprayColor =
+            'text-yellow-400';
+
+    } else if (
+        Number.isFinite(temperature) &&
+        temperature >= profile.heatStress
+    ) {
+
+        spraying =
+            'Use caution during high heat. Prefer cooler conditions if practical.';
+
+        sprayColor =
+            'text-yellow-400';
+    }
+
+    // ------------------------------------------
+    // RENDER
+    // ------------------------------------------
+
+    content.innerHTML = `
+
+        <!-- Status -->
+        <div class="p-4 rounded-xl border ${statusBg} mb-4">
+
+            <div class="flex items-center justify-between gap-3">
+
+                <div>
+
+                    <p class="text-[10px] text-gray-500 uppercase tracking-wider">
+                        Advisory Status
+                    </p>
+
+                    <h4 class="text-xl font-bold ${statusColor} mt-1">
+                        ${status}
+                    </h4>
+
+                </div>
+
+                <i class="fa-solid fa-seedling ${statusColor} text-2xl"></i>
+
+            </div>
+
+            <p class="text-xs text-gray-400 mt-2">
+                ${escapeHtml(current?.name || currentActiveCity)} •
+                ${escapeHtml(crop)}
+            </p>
+
+        </div>
+
+        <!-- Live Conditions -->
+        <div class="grid grid-cols-3 gap-2 mb-4">
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-2.5 text-center">
+
+                <p class="text-[10px] text-gray-500">
+                    Temp
+                </p>
+
+                <p class="text-sm font-bold text-white mt-1">
+                    ${
+                        Number.isFinite(temperature)
+                            ? Math.round(temperature) + '°C'
+                            : '--'
+                    }
+                </p>
+
+            </div>
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-2.5 text-center">
+
+                <p class="text-[10px] text-gray-500">
+                    Humidity
+                </p>
+
+                <p class="text-sm font-bold text-white mt-1">
+                    ${
+                        Number.isFinite(humidity)
+                            ? Math.round(humidity) + '%'
+                            : '--'
+                    }
+                </p>
+
+            </div>
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-2.5 text-center">
+
+                <p class="text-[10px] text-gray-500">
+                    Rain Risk
+                </p>
+
+                <p class="text-sm font-bold ${rainColor} mt-1">
+                    ${rainRisk}
+                </p>
+
+            </div>
+
+        </div>
+
+        <!-- Advisory Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-3">
+                <div class="flex items-center gap-2 mb-1">
+                    <i class="fa-solid fa-droplet text-blue-400 text-xs"></i>
+                    <span class="text-xs font-semibold text-white">
+                        Irrigation
+                    </span>
+                </div>
+
+                <p class="text-[11px] text-gray-400 leading-relaxed">
+                    ${escapeHtml(irrigation)}
+                </p>
+            </div>
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-3">
+                <div class="flex items-center gap-2 mb-1">
+                    <i class="fa-solid fa-temperature-high ${tempColor} text-xs"></i>
+                    <span class="text-xs font-semibold text-white">
+                        Temperature Stress
+                    </span>
+                </div>
+
+                <p class="text-[11px] ${tempColor}">
+                    ${temperatureStress}
+                </p>
+            </div>
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-3">
+                <div class="flex items-center gap-2 mb-1">
+                    <i class="fa-solid fa-shield-halved text-purple-400 text-xs"></i>
+                    <span class="text-xs font-semibold text-white">
+                        Crop Protection
+                    </span>
+                </div>
+
+                <p class="text-[11px] text-gray-400 leading-relaxed">
+                    ${escapeHtml(protection)}
+                </p>
+            </div>
+
+            <div class="bg-[#131521] border border-[#262a40] rounded-xl p-3">
+                <div class="flex items-center gap-2 mb-1">
+                    <i class="fa-solid fa-spray-can-sparkles ${sprayColor} text-xs"></i>
+                    <span class="text-xs font-semibold text-white">
+                        Spraying
+                    </span>
+                </div>
+
+                <p class="text-[11px] ${sprayColor} leading-relaxed">
+                    ${escapeHtml(spraying)}
+                </p>
             </div>
 
         </div>
