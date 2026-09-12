@@ -220,18 +220,18 @@
                     </div>
 
                     <!-- 2. 7-Day Forecast & Rain/UV Grid -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                         <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl">
                             <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-regular fa-calendar-days mr-2"></i> 7-Day Forecast</h3>
                             <div id="daily-container" class="flex flex-col space-y-1"></div>
                         </div>
                         <div class="flex flex-col gap-6">
-                            <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl flex-1">
+                            <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl h-fit self-start">
                                 <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-solid fa-umbrella mr-2"></i> Rain Probability</h3>
                                 <div id="rain-container" class="flex overflow-x-auto scrollbar-hide gap-6 pb-2 snap-x"></div>
                             </div>
                             <!-- UV Index + Heat Stress -->
-<div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl flex-1 min-h-[650px] h-auto">
+<div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl h-fit self-start">
 
     <!-- UV Index -->
     <div>
@@ -239,7 +239,7 @@
             <i class="fa-regular fa-sun mr-2"></i> UV Index
         </h3>
 
-        <div id="uv-container" class="flex flex-col justify-center pb-4">
+        <div id="uv-container" class="flex flex-col justify-center pb-4 h-auto">
             <p class="text-sm text-gray-400">
                 Loading UV data...
             </p>
@@ -280,10 +280,10 @@
                     </div>
 
                     <!-- 4. Sun & Moon Tracking + Air Quality + Weather Alerts -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
                         <!-- Sun & Moon Card -->
-                        <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1">
+                        <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1 h-fit self-start">
                             <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-solid fa-moon text-blue-300 mr-2"></i> Sun & Moon Tracking</h3>
                             <div class="flex flex-col gap-3 text-sm" id="sun-tracking-container">
                                 <!-- Dynamically populated -->
@@ -291,7 +291,7 @@
                         </div>
 
                         <!-- Air Quality Index Card -->
-                        <div id="aqi-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1">
+                        <div id="aqi-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1 h-fit self-start">
                             <h3 class="text-gray-400 font-semibold mb-4 text-sm uppercase tracking-wider">
                                 <i class="fa-solid fa-lungs text-blue-400 mr-2"></i> Air Quality Index
                             </h3>
@@ -306,7 +306,7 @@
                         </div>
 
                         <!-- Weather Alerts Card -->
-                        <div id="alerts-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1">
+                        <div id="alerts-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl lg:col-span-1 h-fit self-start">
                             <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider"><i class="fa-solid fa-bell mr-2"></i> Weather Alerts</h3>
                             <div id="alerts-container" class="flex flex-col gap-3"></div>
                         </div>

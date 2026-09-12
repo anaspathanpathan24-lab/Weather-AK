@@ -452,18 +452,13 @@ function updateDashboardUI(data) {
         }
     }
 
-        // Weather Alerts
-    const alertsContainer = document.getElementById('alerts-container');
-    const alertBadge = document.getElementById('sidebar-alerts-badge');
-
-    if (alertsContainer) {
-        const maxTemp = Number(current?.main?.temp);
-        const windSpeed = Number(current?.wind?.speed);
-
-        const hasHeavyRain = forecastList.some(item =>
-            Number(item?.pop || 0) >= 0.7 ||
-            item?.weather?.[0]?.main === 'Thunderstorm'
-        );
+        
+    // Weather Alerts
+   renderWeatherAlerts(
+       current,
+       forecastList,
+       Number(data?.uv?.value)
+    );
 
         const activeAlerts = [];
 
@@ -506,7 +501,9 @@ function updateDashboardUI(data) {
             });
         }
 
-        if (uviVal >= 8) {
+        const currentUvValue = Number(data?.uv?.value);
+
+    if (Number.isFinite(currentUvValue) && currentUvValue >= 8) {
             activeAlerts.push({
                 icon: 'fa-sun',
                 color: 'text-yellow-500',
@@ -1550,16 +1547,29 @@ function escapeHtml(value) {
 // FAVORITES
 // ==========================================
 
+// ==========================================
+// FAVORITES
+// ==========================================
+
 document.getElementById('favorite-btn')?.addEventListener('click', () => {
     if (!currentActiveCity) return;
 
     let favs = getFavorites();
 
-    if (favs.includes(currentActiveCity)) {
-        favs = favs.filter(city => city !== currentActiveCity);
+    const existingIndex = favs.findIndex(
+        city => city.toLowerCase() === currentActiveCity.toLowerCase()
+    );
+
+    if (existingIndex !== -1) {
+        favs.splice(existingIndex, 1);
     } else {
         favs.push(currentActiveCity);
     }
+
+    // Remove duplicate cities
+    favs = [...new Map(
+        favs.map(city => [city.toLowerCase(), city])
+    ).values()];
 
     localStorage.setItem(
         'gujarat_weather_favorites',
@@ -1572,9 +1582,17 @@ document.getElementById('favorite-btn')?.addEventListener('click', () => {
 
 function getFavorites() {
     try {
-        return JSON.parse(
+        const stored = JSON.parse(
             localStorage.getItem('gujarat_weather_favorites')
-        ) || [];
+        );
+
+        if (!Array.isArray(stored)) return [];
+
+        return [...new Map(
+            stored
+                .filter(city => typeof city === 'string' && city.trim() !== '')
+                .map(city => [city.trim().toLowerCase(), city.trim()])
+        ).values()];
     } catch (error) {
         console.error('Favorites parse error:', error);
         return [];
@@ -1586,8 +1604,9 @@ function updateFavoriteStarUI() {
 
     if (!icon) return;
 
-    const isFavorite =
-        getFavorites().includes(currentActiveCity);
+    const isFavorite = getFavorites().some(
+        city => city.toLowerCase() === currentActiveCity.toLowerCase()
+    );
 
     if (isFavorite) {
         icon.classList.remove('fa-regular');
@@ -1596,6 +1615,26 @@ function updateFavoriteStarUI() {
         icon.classList.remove('fa-solid', 'text-yellow-500');
         icon.classList.add('fa-regular');
     }
+}
+
+function removeFavorite(city, event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    let favs = getFavorites();
+
+    favs = favs.filter(
+        favCity => favCity.toLowerCase() !== city.toLowerCase()
+    );
+
+    localStorage.setItem(
+        'gujarat_weather_favorites',
+        JSON.stringify(favs)
+    );
+
+    updateFavoriteStarUI();
+    renderFavorites();
 }
 
 async function renderFavorites() {
@@ -1627,6 +1666,7 @@ async function renderFavorites() {
             if (!response.ok) continue;
 
             const data = await response.json();
+
             const current =
                 data.current ? data.current : data;
 
@@ -1645,28 +1685,86 @@ async function renderFavorites() {
                     ? Math.round(current.main.temp)
                     : '--';
 
+            const iconCode =
+                current.weather[0].icon || '01d';
+
+            const iconUrl =
+                `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
+
+            const safeCity = escapeHtml(city);
+            const safeDescription = escapeHtml(description);
+
             container.innerHTML += `
                 <div
+                    class="fav-card group relative cursor-pointer
+                           flex items-center gap-3
+                           bg-[#262a40]
+                           hover:bg-[#32364a]
+                           px-4 py-3
+                           rounded-xl
+                           transition
+                           min-w-[190px]
+                           sm:min-w-[210px]
+                           snap-center
+                           border border-[#32364a]"
                     onclick="switchTab('dashboard'); fetchWeatherData('/api/weather?city=${encodeURIComponent(city)}')"
-                    class="fav-card cursor-pointer flex items-center justify-between gap-4 bg-[#262a40] hover:bg-[#32364a] px-4 py-3 rounded-xl transition min-w-[160px] snap-center border border-[#32364a]"
                 >
-                    <div class="flex flex-col">
-                        <span class="text-white font-medium text-sm flex items-center gap-1">
-                            <i class="fa-solid fa-star text-yellow-500 text-[10px]"></i>
-                            ${escapeHtml(city)}
+
+                    <!-- Weather Icon -->
+                    <img
+                        src="${iconUrl}"
+                        alt="${safeDescription}"
+                        class="w-11 h-11 shrink-0"
+                    >
+
+                    <!-- City + Condition -->
+                    <div class="flex flex-col min-w-0 flex-1">
+
+                        <span
+                            class="text-white font-medium text-sm truncate pr-5"
+                        >
+                            <i class="fa-solid fa-star text-yellow-500 text-[10px] mr-1"></i>
+                            ${safeCity}
                         </span>
 
-                        <span class="text-gray-400 text-xs capitalize">
-                            ${escapeHtml(description)}
+                        <span
+                            class="text-gray-400 text-xs capitalize truncate"
+                        >
+                            ${safeDescription}
                         </span>
+
                     </div>
 
-                    <span class="text-lg font-bold text-white">
+                    <!-- Temperature -->
+                    <span
+                        class="text-lg font-bold text-white shrink-0"
+                    >
                         ${temperature}°
                     </span>
+
+                    <!-- Remove Button -->
+                    <button
+                        type="button"
+                        title="Remove ${safeCity}"
+                        aria-label="Remove ${safeCity} from favorites"
+                        onclick="removeFavorite('${safeCity}', event)"
+                        class="absolute top-1 right-1
+                               w-6 h-6
+                               rounded-full
+                               bg-[#131521]/80
+                               text-gray-400
+                               hover:text-red-400
+                               hover:bg-red-500/10
+                               opacity-0
+                               group-hover:opacity-100
+                               transition
+                               flex items-center justify-center"
+                    >
+                        <i class="fa-solid fa-xmark text-[11px]"></i>
+                    </button>
+
                 </div>
             `;
-
         } catch (error) {
             console.error(
                 `Favorite weather error for ${city}:`,
@@ -1675,7 +1773,6 @@ async function renderFavorites() {
         }
     }
 }
-
 
 // ==========================================
 // SEARCH
@@ -2024,12 +2121,6 @@ window.addEventListener(
 
    ========================================================= */
 
-fetchAirQuality(
-    current?.coord?.lat,
-    current?.coord?.lon
-);
-
-
 /* =========================================================
    ADD THESE FUNCTIONS AT THE END OF weather-app.js
    ========================================================= */
@@ -2073,6 +2164,24 @@ async function fetchAirQuality(lat, lon) {
         }
 
         renderAQICard(data);
+
+        const dashboardData = liveDashboardCache[currentActiveCity];
+
+const dashboardCurrent =
+    dashboardData?.current
+        ? dashboardData.current
+        : dashboardData;
+
+if (dashboardCurrent) {
+
+    renderWeatherAlerts(
+        dashboardCurrent,
+        dashboardData?.forecast?.list || [],
+        Number(dashboardData?.uv?.value),
+        data
+    );
+
+}
 
     } catch (error) {
         console.error('AQI error:', error);
@@ -2226,6 +2335,458 @@ function showAQIState(type, message = '') {
             </p>
         </div>
     `;
+}
+
+// ==========================================
+// DYNAMIC WEATHER ALERTS
+// ==========================================
+
+function renderWeatherAlerts(
+    current,
+    forecastList = [],
+    uvValue = NaN,
+    aqiData = null
+) {
+    const alertsContainer =
+        document.getElementById('alerts-container');
+
+    const alertBadge =
+        document.getElementById('sidebar-alerts-badge');
+
+    if (!alertsContainer) return;
+
+    const location =
+        current?.name ||
+        currentActiveCity ||
+        'Current location';
+
+    const alerts = [];
+
+    function addAlert(
+        icon,
+        color,
+        bg,
+        severity,
+        title,
+        description,
+        time = ''
+    ) {
+        alerts.push({
+            icon,
+            color,
+            bg,
+            severity,
+            title,
+            description,
+            location,
+            time
+        });
+    }
+
+    // ==========================================
+    // 1. EXTREME HEAT
+    // ==========================================
+
+    const temp = Number(current?.main?.temp);
+
+    if (Number.isFinite(temp)) {
+
+        if (temp >= 45) {
+
+            addAlert(
+                'fa-temperature-arrow-up',
+                'text-red-400',
+                'bg-red-500/10 border-red-500/30',
+                'Severe',
+                'Extreme Heat',
+                `Dangerous heat detected (${Math.round(temp)}°C). Avoid prolonged outdoor exposure and stay hydrated.`
+            );
+
+        } else if (temp >= 42) {
+
+            addAlert(
+                'fa-temperature-high',
+                'text-red-400',
+                'bg-red-500/10 border-red-500/30',
+                'High',
+                'Extreme Heat Warning',
+                `Very high temperature detected (${Math.round(temp)}°C). Limit outdoor activity and stay hydrated.`
+            );
+
+        } else if (temp >= 38) {
+
+            addAlert(
+                'fa-temperature-half',
+                'text-orange-400',
+                'bg-orange-500/10 border-orange-500/30',
+                'Moderate',
+                'High Temperature',
+                `High temperature detected (${Math.round(temp)}°C). Take breaks and drink plenty of water.`
+            );
+        }
+    }
+
+    // ==========================================
+    // 2. HEAVY RAIN / THUNDERSTORM
+    // ==========================================
+
+    let thunderstormAdded = false;
+    let rainAdded = false;
+
+    for (const item of forecastList) {
+
+        const main =
+            String(
+                item?.weather?.[0]?.main || ''
+            ).toLowerCase();
+
+        const description =
+            String(
+                item?.weather?.[0]?.description || ''
+            ).toLowerCase();
+
+        const pop =
+            Number(item?.pop || 0);
+
+        let timeText = '';
+
+        if (item?.dt) {
+
+            const forecastDate =
+                new Date(Number(item.dt) * 1000);
+
+            timeText =
+                `Expected around ${forecastDate.toLocaleTimeString([], {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                })}`;
+        }
+
+        // Thunderstorm
+
+        if (
+            main === 'thunderstorm' ||
+            description.includes('thunder')
+        ) {
+
+            if (!thunderstormAdded) {
+
+                addAlert(
+                    'fa-cloud-bolt',
+                    'text-red-400',
+                    'bg-red-500/10 border-red-500/30',
+                    'Severe',
+                    'Thunderstorm Alert',
+                    'Thunderstorm activity is forecast. Seek shelter indoors and avoid exposed areas.',
+                    timeText
+                );
+
+                thunderstormAdded = true;
+            }
+        }
+
+        // Heavy Rain
+
+        if (
+            !rainAdded &&
+            main !== 'thunderstorm' &&
+            pop >= 0.85
+        ) {
+
+            addAlert(
+                'fa-cloud-showers-heavy',
+                'text-blue-400',
+                'bg-blue-500/10 border-blue-500/30',
+                'High',
+                'Heavy Rainfall',
+                `High rainfall probability detected (${Math.round(pop * 100)}%).`,
+                timeText
+            );
+
+            rainAdded = true;
+
+        } else if (
+            !rainAdded &&
+            main !== 'thunderstorm' &&
+            pop >= 0.70
+        ) {
+
+            addAlert(
+                'fa-cloud-rain',
+                'text-blue-400',
+                'bg-blue-500/10 border-blue-500/30',
+                'Moderate',
+                'Rainfall Alert',
+                `Rainfall probability is ${Math.round(pop * 100)}%.`,
+                timeText
+            );
+
+            rainAdded = true;
+        }
+    }
+
+    // ==========================================
+    // 3. STRONG WIND
+    // ==========================================
+
+    const windSpeed =
+        Number(current?.wind?.speed);
+
+    if (Number.isFinite(windSpeed)) {
+
+        if (windSpeed >= 20) {
+
+            addAlert(
+                'fa-wind',
+                'text-red-400',
+                'bg-red-500/10 border-red-500/30',
+                'Severe',
+                'Very Strong Winds',
+                `Very strong winds detected (${Math.round(windSpeed)} km/h). Secure loose objects and avoid exposed areas.`
+            );
+
+        } else if (windSpeed >= 15) {
+
+            addAlert(
+                'fa-wind',
+                'text-orange-400',
+                'bg-orange-500/10 border-orange-500/30',
+                'High',
+                'Strong Winds',
+                `Strong winds detected (${Math.round(windSpeed)} km/h). Use caution outdoors.`
+            );
+
+        } else if (windSpeed >= 10) {
+
+            addAlert(
+                'fa-wind',
+                'text-gray-300',
+                'bg-gray-500/20 border-gray-500/40',
+                'Moderate',
+                'Elevated Wind Speed',
+                `Elevated wind speed detected (${Math.round(windSpeed)} km/h).`
+            );
+        }
+    }
+
+    // ==========================================
+    // 4. HIGH UV
+    // ==========================================
+
+    if (Number.isFinite(uvValue)) {
+
+        if (uvValue >= 11) {
+
+            addAlert(
+                'fa-sun',
+                'text-red-400',
+                'bg-red-500/10 border-red-500/30',
+                'Severe',
+                'Extreme UV Index',
+                `UV Index is ${uvValue.toFixed(1)}. Avoid direct sun exposure and use strong sun protection.`
+            );
+
+        } else if (uvValue >= 8) {
+
+            addAlert(
+                'fa-sun',
+                'text-red-400',
+                'bg-red-500/10 border-red-500/30',
+                'High',
+                'High UV Index',
+                `UV Index is ${uvValue.toFixed(1)}. Protect your skin and eyes.`
+            );
+
+        } else if (uvValue >= 6) {
+
+            addAlert(
+                'fa-sun',
+                'text-yellow-400',
+                'bg-yellow-500/10 border-yellow-500/30',
+                'Moderate',
+                'Elevated UV Index',
+                `UV Index is ${uvValue.toFixed(1)}. Sunscreen and eye protection are recommended.`
+            );
+        }
+    }
+
+    // ==========================================
+    // 5. POOR AIR QUALITY
+    // ==========================================
+
+    if (aqiData) {
+
+        const aqi =
+            Number(aqiData?.aqi);
+
+        const category =
+            String(
+                aqiData?.category || ''
+            ).toLowerCase();
+
+        if (
+            aqi >= 5 ||
+            category.includes('very poor')
+        ) {
+
+            addAlert(
+                'fa-lungs',
+                'text-red-400',
+                'bg-red-500/10 border-red-500/30',
+                'Severe',
+                'Very Poor Air Quality',
+                `Air quality is very poor (${aqiData.category || 'AQI 5'}). Avoid strenuous outdoor activity.`
+            );
+
+        } else if (
+            aqi >= 4 ||
+            category.includes('poor')
+        ) {
+
+            addAlert(
+                'fa-lungs',
+                'text-orange-400',
+                'bg-orange-500/10 border-orange-500/30',
+                'High',
+                'Poor Air Quality',
+                `Air quality is poor (${aqiData.category || 'AQI 4'}). Reduce prolonged outdoor exposure if possible.`
+            );
+        }
+    }
+
+    // ==========================================
+    // SORT BY SEVERITY
+    // ==========================================
+
+    const severityRank = {
+        Severe: 4,
+        High: 3,
+        Moderate: 2,
+        Information: 1
+    };
+
+    alerts.sort(
+        (a, b) =>
+            (severityRank[b.severity] || 0) -
+            (severityRank[a.severity] || 0)
+    );
+
+    // ==========================================
+    // NO ALERTS
+    // ==========================================
+
+    alertsContainer.innerHTML = '';
+
+    if (alerts.length === 0) {
+
+        if (alertBadge) {
+            alertBadge.innerText = '0';
+            alertBadge.classList.add('hidden');
+        }
+
+        alertsContainer.innerHTML = `
+            <div class="p-4 rounded-xl border border-green-500/30 bg-green-500/10 flex items-center gap-3">
+
+                <i class="fa-solid fa-circle-check text-green-400 text-lg"></i>
+
+                <span class="text-sm text-green-400 font-medium">
+                    No active weather alerts
+                </span>
+
+            </div>
+        `;
+
+        return;
+    }
+
+    // ==========================================
+    // SIDEBAR BADGE
+    // ==========================================
+
+    if (alertBadge) {
+        alertBadge.innerText = alerts.length;
+        alertBadge.classList.remove('hidden');
+    }
+
+    // ==========================================
+    // RENDER ALERTS
+    // ==========================================
+
+    alerts.forEach(alert => {
+
+        let severityClass =
+            'bg-blue-500/20 text-blue-300 border-blue-500/30';
+
+        if (alert.severity === 'Severe') {
+            severityClass =
+                'bg-red-500/20 text-red-300 border-red-500/30';
+
+        } else if (alert.severity === 'High') {
+            severityClass =
+                'bg-orange-500/20 text-orange-300 border-orange-500/30';
+
+        } else if (alert.severity === 'Moderate') {
+            severityClass =
+                'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
+        }
+
+        alertsContainer.innerHTML += `
+            <div class="p-4 rounded-xl border ${alert.bg}">
+
+                <div class="flex gap-3 items-start">
+
+                    <div class="w-9 h-9 rounded-xl bg-[#131521]/60 flex items-center justify-center shrink-0">
+
+                        <i class="fa-solid ${alert.icon} ${alert.color} text-lg"></i>
+
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+
+                        <div class="flex flex-wrap items-center gap-2">
+
+                            <h4 class="font-bold ${alert.color} text-sm">
+                                ${escapeHtml(alert.title)}
+                            </h4>
+
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${severityClass}">
+                                ${escapeHtml(alert.severity)}
+                            </span>
+
+                        </div>
+
+                        <p class="text-xs text-gray-300 mt-1 leading-relaxed">
+                            ${escapeHtml(alert.description)}
+                        </p>
+
+                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[10px] text-gray-500">
+
+                            <span>
+                                <i class="fa-solid fa-location-dot mr-1"></i>
+                                ${escapeHtml(alert.location)}
+                            </span>
+
+                            ${
+                                alert.time
+                                    ? `
+                                        <span>
+                                            <i class="fa-regular fa-clock mr-1"></i>
+                                            ${escapeHtml(alert.time)}
+                                        </span>
+                                      `
+                                    : ''
+                            }
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+        `;
+    });
 }
 
 function openWeatherAlerts(event) {
