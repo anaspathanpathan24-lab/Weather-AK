@@ -26,6 +26,26 @@
     >
         0
     </span>
+        <a href="#"
+   id="link-travel"
+   onclick="switchTab('travel'); toggleMobileSidebar(true); return false;"
+   class="nav-link flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-[#262a40] hover:text-white transition">
+
+    <i class="fa-solid fa-route w-5 text-center"></i>
+
+    <span>Travel Weather</span>
+
+</a>
+
+<a href="#"
+   onclick="switchTab('weather-analytics'); toggleMobileSidebar(true); return false;"
+   class="nav-link flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-[#262a40] hover:text-white transition">
+
+    <i class="fa-solid fa-chart-line w-5 text-center"></i>
+
+    <span>Weather Analytics</span>
+
+</a>
 </a>
         <a href="#" onclick="switchTab('ai'); toggleMobileSidebar(true)" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-ai">
             <i class="fa-solid fa-robot w-5 text-center"></i><span>Ask meteorologist</span>

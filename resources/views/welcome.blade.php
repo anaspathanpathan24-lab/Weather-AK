@@ -13,6 +13,7 @@
         /* Prevent combined UV + Heat Stress content from overflowing its grid item. */
         #uv-container, #heat-stress-container { min-width: 0; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-[#131521] flex h-screen font-sans overflow-hidden text-gray-300">
 
@@ -619,6 +620,531 @@
                     </div>
 
                 </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- TAB: TRAVEL WEATHER -->
+<div id="tab-travel" class="tab-content hidden">
+
+    <div class="w-full max-w-7xl mx-auto">
+
+        <div class="bg-[#1b1f30] p-6 md:p-8 rounded-3xl border border-[#262a40] shadow-xl">
+
+            <!-- Header -->
+            <div class="mb-6">
+
+                <h2 class="text-2xl font-bold text-white">
+                    <i class="fa-solid fa-route text-blue-400 mr-2"></i>
+                    Travel Weather
+                </h2>
+
+                <p class="text-sm text-gray-400 mt-1">
+                    Check route conditions and weather risk across your Gujarat journey.
+                </p>
+
+            </div>
+
+            <!-- Inputs -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <!-- Starting Location -->
+                <div>
+
+                    <label
+                        for="travel-start"
+                        class="block text-xs text-gray-400 mb-2"
+                    >
+                        Starting Location
+                    </label>
+
+                    <input
+                        type="text"
+                        id="travel-start"
+                        placeholder="e.g. Ahmedabad"
+                        autocomplete="off"
+                        class="w-full px-4 py-3 bg-[#131521] text-white border border-[#262a40] rounded-xl focus:outline-none focus:border-blue-500"
+                    >
+
+                </div>
+
+                <!-- Destination -->
+                <div>
+
+                    <label
+                        for="travel-destination"
+                        class="block text-xs text-gray-400 mb-2"
+                    >
+                        Destination
+                    </label>
+
+                    <input
+                        type="text"
+                        id="travel-destination"
+                        placeholder="e.g. Rajkot"
+                        autocomplete="off"
+                        class="w-full px-4 py-3 bg-[#131521] text-white border border-[#262a40] rounded-xl focus:outline-none focus:border-blue-500"
+                    >
+
+                </div>
+
+            </div>
+
+            <!-- Analyze Button -->
+            <button
+                id="travel-analyze-btn"
+                type="button"
+                onclick="analyzeTravelWeather()"
+                class="w-full md:w-auto mt-4 bg-blue-500 hover:bg-blue-600 text-white font-medium px-6 py-3 rounded-xl transition shadow-lg"
+            >
+                <i class="fa-solid fa-route mr-2"></i>
+                Check Travel Weather
+            </button>
+
+            <!-- Status / Error -->
+            <div
+                id="travel-status"
+                class="hidden mt-5 p-4 rounded-xl border text-sm"
+            ></div>
+
+            <!-- Results -->
+            <div
+                id="travel-results"
+                class="hidden mt-6 space-y-5"
+            >
+
+                <!-- Travel Status -->
+                <div
+                    id="travel-risk-card"
+                    class="p-5 rounded-2xl border"
+                >
+
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
+                        <div>
+
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">
+                                Travel Status
+                            </p>
+
+                            <h3
+                                id="travel-risk-title"
+                                class="text-2xl font-bold mt-1"
+                            >
+                                --
+                            </h3>
+
+                            <p
+                                id="travel-risk-description"
+                                class="text-sm text-gray-400 mt-2"
+                            >
+                                --
+                            </p>
+
+                        </div>
+
+                        <div
+                            id="travel-risk-icon"
+                            class="w-14 h-14 rounded-2xl flex items-center justify-center"
+                        >
+                            <i class="fa-solid fa-car text-2xl"></i>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Route Summary -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">Distance</p>
+
+                        <p
+                            id="travel-distance"
+                            class="text-lg font-bold text-white mt-1"
+                        >
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">Est. Travel Time</p>
+
+                        <p
+                            id="travel-duration"
+                            class="text-lg font-bold text-white mt-1"
+                        >
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">Rain Risk</p>
+
+                        <p
+                            id="travel-rain"
+                            class="text-lg font-bold mt-1"
+                        >
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">Wind</p>
+
+                        <p
+                            id="travel-wind"
+                            class="text-lg font-bold text-white mt-1"
+                        >
+                            --
+                        </p>
+                    </div>
+
+                </div>
+
+                <!-- Weather Conditions -->
+                <div>
+
+                    <h3 class="text-gray-400 font-semibold text-sm uppercase tracking-wider mb-4">
+                        <i class="fa-solid fa-cloud-sun text-blue-400 mr-2"></i>
+                        Weather Along Route
+                    </h3>
+
+                    <div
+                        id="travel-route-weather"
+                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                    ></div>
+
+                </div>
+
+                <!-- Departure Recommendation -->
+                <div
+                    class="bg-[#131521] border border-[#262a40] rounded-2xl p-5"
+                >
+
+                    <div class="flex items-start gap-3">
+
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                            <i class="fa-solid fa-clock text-blue-400"></i>
+                        </div>
+
+                        <div>
+
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">
+                                Recommended Departure
+                            </p>
+
+                            <h4
+                                id="travel-departure"
+                                class="text-xl font-bold text-white mt-1"
+                            >
+                                --
+                            </h4>
+
+                            <p
+                                id="travel-departure-reason"
+                                class="text-xs text-gray-400 mt-1"
+                            >
+                                --
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Attribution -->
+                <p class="text-[10px] text-gray-500">
+                    Route data from OpenStreetMap-based OSRM routing.
+                    Weather values are based on available live/forecast API data;
+                    conditions may change during travel.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- TAB: WEATHER ANALYTICS -->
+<div id="tab-weather-analytics" class="tab-content hidden">
+
+    <div class="w-full max-w-7xl mx-auto">
+
+        <div class="bg-[#1b1f30] p-6 md:p-8 rounded-3xl border border-[#262a40] shadow-xl">
+
+            <!-- Header -->
+            <div class="mb-6">
+
+                <h2 class="text-2xl font-bold text-white">
+                    <i class="fa-solid fa-chart-line text-blue-400 mr-2"></i>
+                    Weather Analytics
+                </h2>
+
+                <p class="text-sm text-gray-400 mt-1">
+                    Analyze weather trends and compare periods using available weather data.
+                </p>
+
+            </div>
+
+            <!-- Filters -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-[#131521] p-5 rounded-2xl border border-[#262a40]">
+
+                <!-- Location -->
+                <div>
+
+                    <label
+                        for="analytics-location"
+                        class="block text-xs text-gray-400 mb-2"
+                    >
+                        Location
+                    </label>
+
+                    <select
+                        id="analytics-location"
+                        class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                    >
+                        <option value="" selected disabled>
+                            Select Gujarat Location
+                        </option>
+                    </select>
+
+                </div>
+
+                <!-- Period -->
+                <div>
+
+                    <label
+                        for="analytics-period"
+                        class="block text-xs text-gray-400 mb-2"
+                    >
+                        Date Range
+                    </label>
+
+                    <select
+                        id="analytics-period"
+                        class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                    >
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="90">Last 3 Months</option>
+                        <option value="365">Last 1 Year</option>
+                    </select>
+
+                </div>
+
+                <!-- Analyze -->
+                <div class="flex items-end">
+
+                    <button
+                        id="analytics-load-btn"
+                        type="button"
+                        onclick="loadWeatherAnalytics()"
+                        class="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 disabled:cursor-not-allowed text-white font-medium py-3 rounded-xl transition shadow-lg text-sm"
+                    >
+                        <i class="fa-solid fa-chart-simple mr-2"></i>
+                        Analyze Weather
+                    </button>
+
+                </div>
+
+            </div>
+
+            <!-- Status -->
+            <div
+                id="analytics-status"
+                class="hidden mb-6 p-4 rounded-xl text-sm border"
+            ></div>
+
+            <!-- Results -->
+            <div
+                id="analytics-results"
+                class="hidden space-y-6"
+            >
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">
+                            Avg Temperature
+                        </p>
+                        <p id="analytics-avg-temp"
+                           class="text-lg font-bold text-white mt-1">
+                            --
+                        </p>
+                        <p id="analytics-avg-temp-change"
+                           class="text-[11px] mt-1 text-gray-500">
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">
+                            Maximum
+                        </p>
+                        <p id="analytics-max-temp"
+                           class="text-lg font-bold text-white mt-1">
+                            --
+                        </p>
+                        <p id="analytics-max-temp-change"
+                           class="text-[11px] mt-1 text-gray-500">
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">
+                            Minimum
+                        </p>
+                        <p id="analytics-min-temp"
+                           class="text-lg font-bold text-white mt-1">
+                            --
+                        </p>
+                        <p id="analytics-min-temp-change"
+                           class="text-[11px] mt-1 text-gray-500">
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">
+                            Rainfall
+                        </p>
+                        <p id="analytics-rainfall"
+                           class="text-lg font-bold text-white mt-1">
+                            --
+                        </p>
+                        <p id="analytics-rainfall-change"
+                           class="text-[11px] mt-1 text-gray-500">
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">
+                            Humidity
+                        </p>
+                        <p id="analytics-humidity"
+                           class="text-lg font-bold text-white mt-1">
+                            --
+                        </p>
+                        <p id="analytics-humidity-change"
+                           class="text-[11px] mt-1 text-gray-500">
+                            --
+                        </p>
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+                        <p class="text-xs text-gray-500">
+                            Wind Speed
+                        </p>
+                        <p id="analytics-wind"
+                           class="text-lg font-bold text-white mt-1">
+                            --
+                        </p>
+                        <p id="analytics-wind-change"
+                           class="text-[11px] mt-1 text-gray-500">
+                            --
+                        </p>
+                    </div>
+
+                </div>
+
+                <!-- Temperature Chart -->
+                <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+
+                    <div class="mb-4">
+
+                        <h3 class="text-white font-semibold">
+                            <i class="fa-solid fa-temperature-half text-blue-400 mr-2"></i>
+                            Temperature Trend
+                        </h3>
+
+                        <p class="text-xs text-gray-500 mt-1">
+                            Average, maximum and minimum temperature
+                        </p>
+
+                    </div>
+
+                    <div class="relative h-[300px]">
+                        <canvas id="analytics-temperature-chart"></canvas>
+                    </div>
+
+                </div>
+
+                <!-- Rain / Humidity Chart -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+
+                        <h3 class="text-white font-semibold mb-1">
+                            <i class="fa-solid fa-cloud-rain text-blue-400 mr-2"></i>
+                            Rainfall
+                        </h3>
+
+                        <p class="text-xs text-gray-500 mb-4">
+                            Daily rainfall trend
+                        </p>
+
+                        <div class="relative h-[280px]">
+                            <canvas id="analytics-rain-chart"></canvas>
+                        </div>
+
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+
+                        <h3 class="text-white font-semibold mb-1">
+                            <i class="fa-solid fa-droplet text-blue-400 mr-2"></i>
+                            Humidity & Wind
+                        </h3>
+
+                        <p class="text-xs text-gray-500 mb-4">
+                            Daily average conditions
+                        </p>
+
+                        <div class="relative h-[280px]">
+                            <canvas id="analytics-humidity-wind-chart"></canvas>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Comparison -->
+                <div
+                    class="bg-[#131521] border border-[#262a40] rounded-2xl p-5"
+                >
+
+                    <h3 class="text-white font-semibold mb-4">
+                        <i class="fa-solid fa-code-compare text-blue-400 mr-2"></i>
+                        Previous Period Comparison
+                    </h3>
+
+                    <div
+                        id="analytics-comparison"
+                        class="text-sm text-gray-400"
+                    >
+                        Comparison data will appear when previous-period data is available.
+                    </div>
+
+                </div>
+
+                <!-- Missing data note -->
+                <div
+                    id="analytics-data-note"
+                    class="hidden text-xs text-gray-500"
+                ></div>
 
             </div>
 

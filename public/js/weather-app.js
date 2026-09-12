@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderFavorites();
     populateHistoricalDropdowns();
     initInteractiveMap();
-    initFarmerAdvisory();
+    initWeatherAnalytics();
     fetchWeatherData('/api/weather?city=Mahesana');
 });
 
@@ -55,12 +55,14 @@ function switchTab(tabName) {
     if (targetTab) {
         targetTab.classList.remove('hidden');
     }
+if (
+    tabName !== 'map' &&
+    tabName !== 'historical' &&
+    tabName !== 'ai' &&
+    tabName !== 'travel' &&
+    tabName !== 'weather-analytics'
+) {
 
-    if (
-        tabName !== 'map' &&
-        tabName !== 'historical' &&
-        tabName !== 'ai'
-    ) {
 
         document
             .getElementById('link-dashboard')
@@ -3798,4 +3800,2991 @@ function renderFarmerAdvisory(
 
         </div>
     `;
+}
+
+// ==========================================
+// TRAVEL WEATHER
+// ==========================================
+
+async function geocodeTravelLocation(city) {
+
+    const response = await fetch(
+        `/api/weather?city=${encodeURIComponent(city)}`
+    );
+
+    const contentType =
+        response.headers.get('content-type') || '';
+
+    if (!contentType.includes('application/json')) {
+        throw new Error(
+            `Unable to find location "${city}".`
+        );
+    }
+
+    const data = await response.json();
+
+    if (
+        !response.ok ||
+        !data
+    ) {
+        throw new Error(
+            data?.error ||
+            `Location "${city}" could not be found.`
+        );
+    }
+
+    const current =
+        data.current
+            ? data.current
+            : data;
+
+    const lat =
+        Number(current?.coord?.lat);
+
+    const lon =
+        Number(current?.coord?.lon);
+
+    if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon)
+    ) {
+        throw new Error(
+            `Coordinates unavailable for "${city}".`
+        );
+    }
+
+    return {
+        name:
+            current.name ||
+            city,
+        lat,
+        lon,
+        data
+    };
+}
+
+
+async function fetchTravelRoute(
+    start,
+    destination
+) {
+
+    const url =
+        `https://router.project-osrm.org/route/v1/driving/` +
+        `${start.lon},${start.lat};${destination.lon},${destination.lat}` +
+        `?overview=full&geometries=geojson`;
+
+    const response =
+        await fetch(url);
+
+    if (!response.ok) {
+        throw new Error(
+            `Route service failed (${response.status}).`
+        );
+    }
+
+    const data =
+        await response.json();
+
+    if (
+        data.code !== 'Ok' ||
+        !data.routes?.length
+    ) {
+        throw new Error(
+            'No drivable route was found between the selected locations.'
+        );
+    }
+
+    return data.routes[0];
+}
+
+
+function sampleRouteCoordinates(
+    coordinates,
+    maxSamples = 5
+) {
+
+    if (
+        !Array.isArray(coordinates) ||
+        coordinates.length === 0
+    ) {
+        return [];
+    }
+
+    if (
+        coordinates.length <= maxSamples
+    ) {
+        return coordinates;
+    }
+
+    const samples = [];
+
+    for (
+        let i = 0;
+        i < maxSamples;
+        i++
+    ) {
+
+        const index =
+            Math.round(
+                (i / (maxSamples - 1)) *
+                (coordinates.length - 1)
+            );
+
+        samples.push(
+            coordinates[index]
+        );
+    }
+
+    return samples;
+}
+
+
+async function fetchTravelPointWeather(
+    coordinate
+) {
+
+    const lon =
+        Number(coordinate[0]);
+
+    const lat =
+        Number(coordinate[1]);
+
+    const response =
+        await fetch(
+            `/api/weather?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
+        );
+
+    const contentType =
+        response.headers.get('content-type') || '';
+
+    if (
+        !response.ok ||
+        !contentType.includes('application/json')
+    ) {
+        throw new Error(
+            'Weather data unavailable for route point.'
+        );
+    }
+
+    const data =
+        await response.json();
+
+    const current =
+        data.current
+            ? data.current
+            : data;
+
+    if (
+        !current?.main ||
+        !current?.weather?.[0]
+    ) {
+        throw new Error(
+            'Incomplete weather data for route point.'
+        );
+    }
+
+    return {
+        current,
+        forecast:
+            data?.forecast?.list || []
+    };
+}
+
+
+function calculateTravelPointRisk(
+    weather
+) {
+
+    const current =
+        weather.current;
+
+    const temp =
+        Number(current?.main?.temp);
+
+    const wind =
+        Number(current?.wind?.speed);
+
+    const visibility =
+        Number(current?.visibility);
+
+    const forecast =
+        weather.forecast || [];
+
+    const rainValues =
+        forecast
+            .slice(0, 6)
+            .map(item =>
+                Number(item?.pop || 0)
+            );
+
+    const maxRain =
+        rainValues.length
+            ? Math.max(...rainValues)
+            : 0;
+
+    const condition =
+        String(
+            current?.weather?.[0]?.main || ''
+        ).toLowerCase();
+
+    let score = 0;
+
+    if (
+        condition.includes('thunder') ||
+        condition.includes('storm')
+    ) {
+        score += 5;
+    }
+
+    if (
+        condition.includes('rain') ||
+        maxRain >= 0.85
+    ) {
+        score += 3;
+    } else if (
+        maxRain >= 0.70
+    ) {
+        score += 2;
+    }
+
+    if (
+        Number.isFinite(wind) &&
+        wind >= 20
+    ) {
+        score += 3;
+    } else if (
+        Number.isFinite(wind) &&
+        wind >= 15
+    ) {
+        score += 2;
+    } else if (
+        Number.isFinite(wind) &&
+        wind >= 10
+    ) {
+        score += 1;
+    }
+
+    if (
+        Number.isFinite(temp) &&
+        temp >= 42
+    ) {
+        score += 3;
+    } else if (
+        Number.isFinite(temp) &&
+        temp >= 38
+    ) {
+        score += 1;
+    }
+
+    if (
+        Number.isFinite(visibility) &&
+        visibility < 2000
+    ) {
+        score += 3;
+    } else if (
+        Number.isFinite(visibility) &&
+        visibility < 5000
+    ) {
+        score += 1;
+    }
+
+    let status =
+        'Road Weather Safe';
+
+    if (score >= 6) {
+        status = 'High Risk';
+    } else if (score >= 3) {
+        status = 'Caution';
+    }
+
+    return {
+        score,
+        status,
+        temp,
+        wind,
+        visibility,
+        rainProbability: maxRain,
+        condition:
+            current?.weather?.[0]?.description ||
+            'Unknown',
+        icon:
+            current?.weather?.[0]?.icon ||
+            '01d'
+    };
+}
+
+
+function calculateOverallTravelRisk(
+    points
+) {
+
+    const total =
+        points.reduce(
+            (sum, point) =>
+                sum + point.score,
+            0
+        );
+
+    const average =
+        points.length
+            ? total / points.length
+            : 0;
+
+    const worst =
+        points.reduce(
+            (max, point) =>
+                Math.max(
+                    max,
+                    point.score
+                ),
+            0
+        );
+
+    if (
+        worst >= 6 ||
+        average >= 5
+    ) {
+        return 'High Risk';
+    }
+
+    if (
+        worst >= 3 ||
+        average >= 2
+    ) {
+        return 'Caution';
+    }
+
+    return 'Road Weather Safe';
+}
+
+
+function formatDistance(
+    meters
+) {
+
+    const km =
+        Number(meters) / 1000;
+
+    if (
+        !Number.isFinite(km)
+    ) {
+        return '--';
+    }
+
+    return km >= 100
+        ? `${km.toFixed(0)} km`
+        : `${km.toFixed(1)} km`;
+}
+
+
+function formatDuration(
+    seconds
+) {
+
+    const totalMinutes =
+        Math.round(
+            Number(seconds) / 60
+        );
+
+    if (
+        !Number.isFinite(totalMinutes)
+    ) {
+        return '--';
+    }
+
+    const hours =
+        Math.floor(
+            totalMinutes / 60
+        );
+
+    const minutes =
+        totalMinutes % 60;
+
+    if (hours <= 0) {
+        return `${minutes} min`;
+    }
+
+    if (minutes === 0) {
+        return `${hours} hr`;
+    }
+
+    return `${hours} hr ${minutes} min`;
+}
+
+
+function getTravelRiskStyle(
+    status
+) {
+
+    if (status === 'High Risk') {
+
+        return {
+            color: 'text-red-400',
+            bg: 'bg-red-500/10',
+            border: 'border-red-500/30',
+            iconBg: 'bg-red-500/10',
+            icon: 'fa-triangle-exclamation'
+        };
+
+    }
+
+    if (status === 'Caution') {
+
+        return {
+            color: 'text-yellow-400',
+            bg: 'bg-yellow-500/10',
+            border: 'border-yellow-500/30',
+            iconBg: 'bg-yellow-500/10',
+            icon: 'fa-cloud-sun'
+        };
+
+    }
+
+    return {
+        color: 'text-green-400',
+        bg: 'bg-green-500/10',
+        border: 'border-green-500/30',
+        iconBg: 'bg-green-500/10',
+        icon: 'fa-road'
+    };
+}
+
+
+function getRoutePointLabel(
+    index,
+    total,
+    startName,
+    destinationName
+) {
+
+    if (index === 0) {
+        return startName;
+    }
+
+    if (index === total - 1) {
+        return destinationName;
+    }
+
+    return `Route Point ${index + 1}`;
+}
+
+
+function chooseRecommendedDeparture(
+    routeWeather
+) {
+
+    const candidates = [];
+
+    routeWeather.forEach(point => {
+
+        const forecast =
+            point.weather?.forecast || [];
+
+        forecast
+            .slice(0, 5)
+            .forEach(item => {
+
+                const dt =
+                    Number(item?.dt);
+
+                if (!dt) return;
+
+                const temp =
+                    Number(item?.main?.temp);
+
+                const wind =
+                    Number(item?.wind?.speed);
+
+                const rain =
+                    Number(item?.pop || 0);
+
+                const condition =
+                    String(
+                        item?.weather?.[0]?.main || ''
+                    ).toLowerCase();
+
+                let risk = 0;
+
+                if (
+                    condition.includes('thunder')
+                ) {
+                    risk += 5;
+                }
+
+                if (
+                    rain >= 0.85
+                ) {
+                    risk += 4;
+                } else if (
+                    rain >= 0.70
+                ) {
+                    risk += 2;
+                }
+
+                if (
+                    Number.isFinite(wind) &&
+                    wind >= 15
+                ) {
+                    risk += 2;
+                }
+
+                if (
+                    Number.isFinite(temp) &&
+                    temp >= 40
+                ) {
+                    risk += 2;
+                }
+
+                candidates.push({
+                    dt,
+                    risk
+                });
+            });
+    });
+
+    if (!candidates.length) {
+
+        return {
+            time: 'Now',
+            reason:
+                'A future forecast window is not available from the weather data.'
+        };
+    }
+
+    const grouped = {};
+
+    candidates.forEach(candidate => {
+
+        // Group by forecast timestamp
+        if (!grouped[candidate.dt]) {
+            grouped[candidate.dt] = {
+                totalRisk: 0,
+                count: 0
+            };
+        }
+
+        grouped[candidate.dt].totalRisk +=
+            candidate.risk;
+
+        grouped[candidate.dt].count += 1;
+    });
+
+    const best =
+        Object.keys(grouped)
+            .map(dt => ({
+                dt: Number(dt),
+                risk:
+                    grouped[dt].totalRisk /
+                    grouped[dt].count
+            }))
+            .sort((a, b) =>
+                a.risk - b.risk
+            )[0];
+
+    if (!best) {
+
+        return {
+            time: 'Now',
+            reason:
+                'No suitable future forecast window was available.'
+        };
+    }
+
+    const date =
+        new Date(best.dt * 1000);
+
+    const time =
+        date.toLocaleString([], {
+            weekday: 'short',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+
+    let reason =
+        'This forecast window has the lowest combined weather risk among the available forecast periods.';
+
+    if (best.risk >= 4) {
+        reason =
+            'All available forecast windows show elevated weather risk; travel should be reconsidered and local conditions monitored.';
+    } else if (best.risk >= 2) {
+        reason =
+            'This forecast window has comparatively lower weather risk, but caution is still advised.';
+    }
+
+    return {
+        time,
+        reason
+    };
+}
+
+
+function renderTravelWeather(
+    start,
+    destination,
+    route,
+    routeWeather
+) {
+
+    const results =
+        document.getElementById(
+            'travel-results'
+        );
+
+    const distanceEl =
+        document.getElementById(
+            'travel-distance'
+        );
+
+    const durationEl =
+        document.getElementById(
+            'travel-duration'
+        );
+
+    const rainEl =
+        document.getElementById(
+            'travel-rain'
+        );
+
+    const windEl =
+        document.getElementById(
+            'travel-wind'
+        );
+
+    const weatherContainer =
+        document.getElementById(
+            'travel-route-weather'
+        );
+
+    const riskCard =
+        document.getElementById(
+            'travel-risk-card'
+        );
+
+    const riskTitle =
+        document.getElementById(
+            'travel-risk-title'
+        );
+
+    const riskDescription =
+        document.getElementById(
+            'travel-risk-description'
+        );
+
+    const riskIcon =
+        document.getElementById(
+            'travel-risk-icon'
+        );
+
+    const departureEl =
+        document.getElementById(
+            'travel-departure'
+        );
+
+    const departureReasonEl =
+        document.getElementById(
+            'travel-departure-reason'
+        );
+
+    if (!results) return;
+
+    const overallStatus =
+        calculateOverallTravelRisk(
+            routeWeather
+        );
+
+    const style =
+        getTravelRiskStyle(
+            overallStatus
+        );
+
+    // Route summary
+    distanceEl.innerText =
+        formatDistance(
+            route.distance
+        );
+
+    durationEl.innerText =
+        formatDuration(
+            route.duration
+        );
+
+    const maxRain =
+        Math.max(
+            ...routeWeather.map(
+                point =>
+                    point.risk.rainProbability
+            )
+        );
+
+    const maxWind =
+        Math.max(
+            ...routeWeather.map(
+                point =>
+                    Number(point.risk.wind) || 0
+            )
+        );
+
+    rainEl.innerText =
+        maxRain >= 0.85
+            ? `${Math.round(maxRain * 100)}% High`
+            : maxRain >= 0.70
+                ? `${Math.round(maxRain * 100)}% Moderate`
+                : `${Math.round(maxRain * 100)}% Low`;
+
+    rainEl.className =
+        maxRain >= 0.85
+            ? 'text-lg font-bold text-red-400 mt-1'
+            : maxRain >= 0.70
+                ? 'text-lg font-bold text-yellow-400 mt-1'
+                : 'text-lg font-bold text-green-400 mt-1';
+
+    windEl.innerText =
+        `${Math.round(maxWind)} km/h`;
+
+    // Risk card
+    riskCard.className =
+        `p-5 rounded-2xl border ${style.bg} ${style.border}`;
+
+    riskTitle.className =
+        `text-2xl font-bold mt-1 ${style.color}`;
+
+    riskTitle.innerText =
+        overallStatus;
+
+    riskIcon.className =
+        `w-14 h-14 rounded-2xl flex items-center justify-center ${style.iconBg}`;
+
+    riskIcon.innerHTML =
+        `<i class="fa-solid ${style.icon} ${style.color} text-2xl"></i>`;
+
+    if (overallStatus === 'High Risk') {
+
+        riskDescription.innerText =
+            'Significant weather risk is present along the route. Consider postponing travel or monitoring conditions closely.';
+
+    } else if (overallStatus === 'Caution') {
+
+        riskDescription.innerText =
+            'Some weather conditions may affect the journey. Drive carefully and monitor changing conditions.';
+
+    } else {
+
+        riskDescription.innerText =
+            'Available weather conditions are generally favorable for road travel.';
+
+    }
+
+    // Route weather cards
+    weatherContainer.innerHTML = '';
+
+    routeWeather.forEach((point, index) => {
+
+        const risk =
+            point.risk;
+
+        let riskColor =
+            'text-green-400';
+
+        if (risk.status === 'High Risk') {
+            riskColor =
+                'text-red-400';
+        } else if (
+            risk.status === 'Caution'
+        ) {
+            riskColor =
+                'text-yellow-400';
+        }
+
+        const visibilityKm =
+            Number(risk.visibility);
+
+        const visibilityText =
+            Number.isFinite(
+                visibilityKm
+            )
+                ? `${(visibilityKm / 1000).toFixed(1)} km`
+                : 'Unavailable';
+
+        const iconUrl =
+            `https://openweathermap.org/img/wn/${risk.icon}@2x.png`;
+
+        const rainText =
+            `${Math.round(
+                risk.rainProbability * 100
+            )}%`;
+
+        weatherContainer.innerHTML += `
+            <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-4">
+
+                <div class="flex items-center justify-between gap-3">
+
+                    <div class="min-w-0">
+
+                        <p class="text-sm font-semibold text-white truncate">
+                            ${escapeHtml(
+                                getRoutePointLabel(
+                                    index,
+                                    routeWeather.length,
+                                    start.name,
+                                    destination.name
+                                )
+                            )}
+                        </p>
+
+                        <p class="text-[11px] text-gray-500 capitalize mt-1">
+                            ${escapeHtml(risk.condition)}
+                        </p>
+
+                    </div>
+
+                    <img
+                        src="${iconUrl}"
+                        alt="${escapeHtml(risk.condition)}"
+                        class="w-12 h-12 shrink-0"
+                    >
+
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 mt-3">
+
+                    <div class="bg-[#1b1f30] rounded-xl p-2.5">
+                        <p class="text-[10px] text-gray-500">
+                            Temperature
+                        </p>
+
+                        <p class="text-sm font-bold text-white mt-1">
+                            ${
+                                Number.isFinite(risk.temp)
+                                    ? Math.round(risk.temp) + '°C'
+                                    : '--'
+                            }
+                        </p>
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-2.5">
+                        <p class="text-[10px] text-gray-500">
+                            Wind
+                        </p>
+
+                        <p class="text-sm font-bold text-white mt-1">
+                            ${
+                                Number.isFinite(risk.wind)
+                                    ? Math.round(risk.wind) + ' km/h'
+                                    : '--'
+                            }
+                        </p>
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-2.5">
+                        <p class="text-[10px] text-gray-500">
+                            Visibility
+                        </p>
+
+                        <p class="text-sm font-bold text-white mt-1">
+                            ${visibilityText}
+                        </p>
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-2.5">
+                        <p class="text-[10px] text-gray-500">
+                            Rain Risk
+                        </p>
+
+                        <p class="text-sm font-bold ${riskColor} mt-1">
+                            ${rainText}
+                        </p>
+                    </div>
+
+                </div>
+
+            </div>
+        `;
+    });
+
+    // Departure recommendation
+    const departure =
+        chooseRecommendedDeparture(
+            routeWeather
+        );
+
+    departureEl.innerText =
+        departure.time;
+
+    departureReasonEl.innerText =
+        departure.reason;
+
+    results.classList.remove(
+        'hidden'
+    );
+}
+
+
+async function analyzeTravelWeather() {
+
+    const startInput =
+        document.getElementById(
+            'travel-start'
+        );
+
+    const destinationInput =
+        document.getElementById(
+            'travel-destination'
+        );
+
+    const button =
+        document.getElementById(
+            'travel-analyze-btn'
+        );
+
+    const status =
+        document.getElementById(
+            'travel-status'
+        );
+
+    const results =
+        document.getElementById(
+            'travel-results'
+        );
+
+    if (
+        !startInput ||
+        !destinationInput ||
+        !button ||
+        !status ||
+        !results
+    ) {
+        return;
+    }
+
+    const startCity =
+        startInput.value.trim();
+
+    const destinationCity =
+        destinationInput.value.trim();
+
+    if (
+        !startCity ||
+        !destinationCity
+    ) {
+
+        status.className =
+            'mt-5 p-4 rounded-xl border bg-red-500/10 border-red-500/30 text-red-400 text-sm';
+
+        status.innerText =
+            'Please enter both starting location and destination.';
+
+        results.classList.add(
+            'hidden'
+        );
+
+        return;
+    }
+
+    if (
+        startCity.toLowerCase() ===
+        destinationCity.toLowerCase()
+    ) {
+
+        status.className =
+            'mt-5 p-4 rounded-xl border bg-yellow-500/10 border-yellow-500/30 text-yellow-400 text-sm';
+
+        status.innerText =
+            'Starting location and destination must be different.';
+
+        results.classList.add(
+            'hidden'
+        );
+
+        return;
+    }
+
+    button.disabled = true;
+
+    button.innerHTML =
+        `
+            <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+            Analyzing Route...
+        `;
+
+    status.className =
+        'mt-5 p-4 rounded-xl border bg-blue-500/10 border-blue-500/30 text-blue-400 text-sm';
+
+    status.innerText =
+        'Finding locations, route and available weather conditions...';
+
+    results.classList.add(
+        'hidden'
+    );
+
+    try {
+
+        // Real geocoding through existing weather endpoint
+        const start =
+            await geocodeTravelLocation(
+                startCity
+            );
+
+        const destination =
+            await geocodeTravelLocation(
+                destinationCity
+            );
+
+        // Restrict feature to Gujarat
+        const gujaratMinLat = 20.0;
+        const gujaratMaxLat = 24.8;
+        const gujaratMinLon = 68.0;
+        const gujaratMaxLon = 74.5;
+
+        const isInGujarat = point =>
+            point.lat >= gujaratMinLat &&
+            point.lat <= gujaratMaxLat &&
+            point.lon >= gujaratMinLon &&
+            point.lon <= gujaratMaxLon;
+
+        if (
+            !isInGujarat(start) ||
+            !isInGujarat(destination)
+        ) {
+
+            throw new Error(
+                'Travel Weather currently supports Gujarat locations only.'
+            );
+        }
+
+        // Real road route
+        const route =
+            await fetchTravelRoute(
+                start,
+                destination
+            );
+
+        const routeCoordinates =
+            route?.geometry?.coordinates || [];
+
+        const samples =
+            sampleRouteCoordinates(
+                routeCoordinates,
+                5
+            );
+
+        if (!samples.length) {
+            throw new Error(
+                'The route did not contain usable weather points.'
+            );
+        }
+
+        status.innerText =
+            'Fetching weather conditions along the route...';
+
+        const weatherResults =
+            await Promise.allSettled(
+                samples.map(
+                    coordinate =>
+                        fetchTravelPointWeather(
+                            coordinate
+                        )
+                )
+            );
+
+        const successful =
+            weatherResults
+                .filter(
+                    result =>
+                        result.status === 'fulfilled'
+                )
+                .map(
+                    result =>
+                        result.value
+                );
+
+        if (!successful.length) {
+            throw new Error(
+                'Weather data could not be retrieved along this route.'
+            );
+        }
+
+        const routeWeather =
+            successful.map(
+                weather => ({
+                    weather,
+                    risk:
+                        calculateTravelPointRisk(
+                            weather
+                        )
+                })
+            );
+
+        renderTravelWeather(
+            start,
+            destination,
+            route,
+            routeWeather
+        );
+
+        status.className =
+            'mt-5 p-4 rounded-xl border bg-green-500/10 border-green-500/30 text-green-400 text-sm';
+
+        status.innerText =
+            `Route analysis completed for ${start.name} → ${destination.name}.`;
+
+    } catch (error) {
+
+        console.error(
+            'Travel Weather error:',
+            error
+        );
+
+        results.classList.add(
+            'hidden'
+        );
+
+        status.className =
+            'mt-5 p-4 rounded-xl border bg-red-500/10 border-red-500/30 text-red-400 text-sm';
+
+        status.innerText =
+            error.message ||
+            'Unable to analyze the travel route.';
+
+    } finally {
+
+        button.disabled = false;
+
+        button.innerHTML =
+            `
+                <i class="fa-solid fa-route mr-2"></i>
+                Check Travel Weather
+            `;
+    }
+}
+
+// ==========================================
+// WEATHER ANALYTICS
+// ==========================================
+
+let weatherAnalyticsCharts = {
+    temperature: null,
+    rainfall: null,
+    humidityWind: null
+};
+
+
+function initWeatherAnalytics() {
+
+    const locationSelect =
+        document.getElementById(
+            'analytics-location'
+        );
+
+    if (!locationSelect) return;
+
+    locationSelect.innerHTML = `
+        <option value="" selected disabled>
+            Select Gujarat Location
+        </option>
+    `;
+
+    gujaratDistricts.forEach(
+        district => {
+
+            const option =
+                document.createElement('option');
+
+            option.value = district;
+            option.textContent = district;
+
+            locationSelect.appendChild(
+                option
+            );
+        }
+    );
+}
+
+
+function setAnalyticsStatus(
+    message,
+    type = 'info'
+) {
+
+    const status =
+        document.getElementById(
+            'analytics-status'
+        );
+
+    if (!status) return;
+
+    status.classList.remove(
+        'hidden',
+        'bg-blue-500/10',
+        'border-blue-500/30',
+        'text-blue-400',
+        'bg-red-500/10',
+        'border-red-500/30',
+        'text-red-400',
+        'bg-yellow-500/10',
+        'border-yellow-500/30',
+        'text-yellow-400'
+    );
+
+    if (type === 'error') {
+
+        status.classList.add(
+            'bg-red-500/10',
+            'border-red-500/30',
+            'text-red-400'
+        );
+
+    } else if (type === 'warning') {
+
+        status.classList.add(
+            'bg-yellow-500/10',
+            'border-yellow-500/30',
+            'text-yellow-400'
+        );
+
+    } else {
+
+        status.classList.add(
+            'bg-blue-500/10',
+            'border-blue-500/30',
+            'text-blue-400'
+        );
+    }
+
+    status.innerText =
+        message;
+}
+
+
+function analyticsPercentChange(
+    current,
+    previous
+) {
+
+    current =
+        Number(current);
+
+    previous =
+        Number(previous);
+
+    if (
+        !Number.isFinite(current) ||
+        !Number.isFinite(previous) ||
+        previous === 0
+    ) {
+        return null;
+    }
+
+    return (
+        ((current - previous) /
+            Math.abs(previous)) *
+        100
+    );
+}
+
+
+function formatAnalyticsChange(
+    current,
+    previous
+) {
+
+    const change =
+        analyticsPercentChange(
+            current,
+            previous
+        );
+
+    if (change === null) {
+        return 'Previous data unavailable';
+    }
+
+    const rounded =
+        Math.abs(change).toFixed(1);
+
+    if (change > 0) {
+        return `↑ ${rounded}% increase`;
+    }
+
+    if (change < 0) {
+        return `↓ ${rounded}% decrease`;
+    }
+
+    return 'No change';
+}
+
+
+function analyticsNumber(
+    value,
+    decimals = 1
+) {
+
+    const number =
+        Number(value);
+
+    if (
+        !Number.isFinite(number)
+    ) {
+        return null;
+    }
+
+    return Number(
+        number.toFixed(decimals)
+    );
+}
+
+
+function aggregateAnalyticsData(
+    list
+) {
+
+    if (
+        !Array.isArray(list) ||
+        !list.length
+    ) {
+        return null;
+    }
+
+    const valid =
+        list.filter(
+            item =>
+                item &&
+                Number.isFinite(
+                    Number(item.main?.temp)
+                )
+        );
+
+    if (!valid.length) {
+        return null;
+    }
+
+    const temperatures =
+        valid
+            .map(item =>
+                Number(item.main.temp)
+            );
+
+    const humidityValues =
+        valid
+            .map(item =>
+                Number(item.main?.humidity)
+            )
+            .filter(Number.isFinite);
+
+    const windValues =
+        valid
+            .map(item =>
+                Number(item.wind?.speed)
+            )
+            .filter(Number.isFinite);
+
+    let rainfall = 0;
+
+    valid.forEach(item => {
+
+        const rain1h =
+            Number(
+                item.rain?.['1h']
+            );
+
+        if (
+            Number.isFinite(rain1h)
+        ) {
+            rainfall +=
+                rain1h;
+        }
+
+    });
+
+    return {
+
+        avgTemp:
+            temperatures.reduce(
+                (a, b) => a + b,
+                0
+            ) /
+            temperatures.length,
+
+        maxTemp:
+            Math.max(
+                ...temperatures
+            ),
+
+        minTemp:
+            Math.min(
+                ...temperatures
+            ),
+
+        rainfall,
+
+        humidity:
+            humidityValues.length
+                ? humidityValues.reduce(
+                    (a, b) => a + b,
+                    0
+                ) /
+                humidityValues.length
+                : null,
+
+        wind:
+            windValues.length
+                ? windValues.reduce(
+                    (a, b) => a + b,
+                    0
+                ) /
+                windValues.length
+                : null
+    };
+}
+
+
+function destroyAnalyticsCharts() {
+
+    Object.keys(
+        weatherAnalyticsCharts
+    ).forEach(key => {
+
+        const chart =
+            weatherAnalyticsCharts[key];
+
+        if (chart) {
+            chart.destroy();
+        }
+
+        weatherAnalyticsCharts[key] =
+            null;
+    });
+}
+
+
+function renderAnalyticsCharts(
+    labels,
+    currentData
+) {
+
+    if (
+        typeof Chart === 'undefined'
+    ) {
+        console.error(
+            'Chart.js is not loaded.'
+        );
+
+        return;
+    }
+
+    destroyAnalyticsCharts();
+
+    const axisColor =
+        '#6b7280';
+
+    const gridColor =
+        'rgba(107,114,128,0.15)';
+
+    // Temperature
+    const tempCtx =
+        document
+            .getElementById(
+                'analytics-temperature-chart'
+            )
+            ?.getContext('2d');
+
+    if (tempCtx) {
+
+        weatherAnalyticsCharts.temperature =
+            new Chart(
+                tempCtx,
+                {
+                    type: 'line',
+
+                    data: {
+                        labels,
+
+                        datasets: [
+                            {
+                                label: 'Average',
+                                data:
+                                    currentData.avgTemps,
+
+                                borderColor:
+                                    '#60a5fa',
+
+                                backgroundColor:
+                                    'rgba(96,165,250,0.08)',
+
+                                tension: 0.35,
+
+                                fill: true,
+
+                                pointRadius: 2
+                            },
+                            {
+                                label: 'Maximum',
+                                data:
+                                    currentData.maxTemps,
+
+                                borderColor:
+                                    '#f87171',
+
+                                tension: 0.35,
+
+                                pointRadius: 2
+                            },
+                            {
+                                label: 'Minimum',
+                                data:
+                                    currentData.minTemps,
+
+                                borderColor:
+                                    '#34d399',
+
+                                tension: 0.35,
+
+                                pointRadius: 2
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio: false,
+
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color:
+                                        '#d1d5db'
+                                }
+                            }
+                        },
+
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            },
+
+                            y: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+    }
+
+
+    // Rainfall
+    const rainCtx =
+        document
+            .getElementById(
+                'analytics-rain-chart'
+            )
+            ?.getContext('2d');
+
+    if (rainCtx) {
+
+        weatherAnalyticsCharts.rainfall =
+            new Chart(
+                rainCtx,
+                {
+                    type: 'bar',
+
+                    data: {
+                        labels,
+
+                        datasets: [
+                            {
+                                label:
+                                    'Rainfall',
+
+                                data:
+                                    currentData.rainfall,
+
+                                backgroundColor:
+                                    'rgba(96,165,250,0.65)',
+
+                                borderRadius: 5
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio: false,
+
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color:
+                                        '#d1d5db'
+                                }
+                            }
+                        },
+
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            },
+
+                            y: {
+                                beginAtZero: true,
+
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+    }
+
+
+    // Humidity + Wind
+    const humidityWindCtx =
+        document
+            .getElementById(
+                'analytics-humidity-wind-chart'
+            )
+            ?.getContext('2d');
+
+    if (humidityWindCtx) {
+
+        weatherAnalyticsCharts.humidityWind =
+            new Chart(
+                humidityWindCtx,
+                {
+                    type: 'line',
+
+                    data: {
+                        labels,
+
+                        datasets: [
+                            {
+                                label:
+                                    'Humidity %',
+
+                                data:
+                                    currentData.humidity,
+
+                                borderColor:
+                                    '#a78bfa',
+
+                                tension: 0.35,
+
+                                pointRadius: 2
+                            },
+                            {
+                                label:
+                                    'Wind m/s',
+
+                                data:
+                                    currentData.wind,
+
+                                borderColor:
+                                    '#fbbf24',
+
+                                tension: 0.35,
+
+                                pointRadius: 2
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio: false,
+
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color:
+                                        '#d1d5db'
+                                }
+                            }
+                        },
+
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            },
+
+                            y: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+    }
+}
+
+
+function updateAnalyticsSummary(
+    current,
+    previous
+) {
+
+    const values = {
+        'analytics-avg-temp':
+            current.avgTemp,
+
+        'analytics-max-temp':
+            current.maxTemp,
+
+        'analytics-min-temp':
+            current.minTemp,
+
+        'analytics-rainfall':
+            current.rainfall,
+
+        'analytics-humidity':
+            current.humidity,
+
+        'analytics-wind':
+            current.wind
+    };
+
+    const formats = {
+        'analytics-avg-temp':
+            value =>
+                `${value.toFixed(1)}°C`,
+
+        'analytics-max-temp':
+            value =>
+                `${value.toFixed(1)}°C`,
+
+        'analytics-min-temp':
+            value =>
+                `${value.toFixed(1)}°C`,
+
+        'analytics-rainfall':
+            value =>
+                `${value.toFixed(1)} mm`,
+
+        'analytics-humidity':
+            value =>
+                `${value.toFixed(1)}%`,
+
+        'analytics-wind':
+            value =>
+                `${value.toFixed(1)} m/s`
+    };
+
+    Object.entries(values)
+        .forEach(
+            ([id, value]) => {
+
+                const element =
+                    document.getElementById(
+                        id
+                    );
+
+                if (
+                    !element ||
+                    !Number.isFinite(
+                        Number(value)
+                    )
+                ) {
+                    if (element) {
+                        element.innerText =
+                            'Unavailable';
+                    }
+
+                    return;
+                }
+
+                element.innerText =
+                    formats[id](
+                        Number(value)
+                    );
+            }
+        );
+
+
+    const changeMap = {
+
+        'analytics-avg-temp-change':
+            [
+                current.avgTemp,
+                previous?.avgTemp
+            ],
+
+        'analytics-max-temp-change':
+            [
+                current.maxTemp,
+                previous?.maxTemp
+            ],
+
+        'analytics-min-temp-change':
+            [
+                current.minTemp,
+                previous?.minTemp
+            ],
+
+        'analytics-rainfall-change':
+            [
+                current.rainfall,
+                previous?.rainfall
+            ],
+
+        'analytics-humidity-change':
+            [
+                current.humidity,
+                previous?.humidity
+            ],
+
+        'analytics-wind-change':
+            [
+                current.wind,
+                previous?.wind
+            ]
+    };
+
+    Object.entries(
+        changeMap
+    ).forEach(
+        ([id, values]) => {
+
+            const element =
+                document.getElementById(
+                    id
+                );
+
+            if (!element) return;
+
+            const change =
+                analyticsPercentChange(
+                    values[0],
+                    values[1]
+                );
+
+            element.innerText =
+                formatAnalyticsChange(
+                    values[0],
+                    values[1]
+                );
+
+            element.classList.remove(
+                'text-green-400',
+                'text-red-400',
+                'text-gray-500'
+            );
+
+            if (change === null) {
+
+                element.classList.add(
+                    'text-gray-500'
+                );
+
+            } else if (change > 0) {
+
+                element.classList.add(
+                    'text-red-400'
+                );
+
+            } else if (change < 0) {
+
+                element.classList.add(
+                    'text-green-400'
+                );
+
+            } else {
+
+                element.classList.add(
+                    'text-gray-500'
+                );
+            }
+        }
+    );
+}
+
+
+function renderAnalyticsComparison(
+    current,
+    previous
+) {
+
+    const container =
+        document.getElementById(
+            'analytics-comparison'
+        );
+
+    if (!container) return;
+
+    if (!previous) {
+
+        container.innerHTML = `
+            <div class="p-4 rounded-xl bg-[#1b1f30] border border-[#262a40]">
+                Previous-period data is not available for comparison.
+            </div>
+        `;
+
+        return;
+    }
+
+    const metrics = [
+        {
+            name: 'Average Temperature',
+            current: current.avgTemp,
+            previous: previous.avgTemp,
+            unit: '°C'
+        },
+        {
+            name: 'Maximum Temperature',
+            current: current.maxTemp,
+            previous: previous.maxTemp,
+            unit: '°C'
+        },
+        {
+            name: 'Minimum Temperature',
+            current: current.minTemp,
+            previous: previous.minTemp,
+            unit: '°C'
+        },
+        {
+            name: 'Rainfall',
+            current: current.rainfall,
+            previous: previous.rainfall,
+            unit: ' mm'
+        },
+        {
+            name: 'Humidity',
+            current: current.humidity,
+            previous: previous.humidity,
+            unit: '%'
+        },
+        {
+            name: 'Wind Speed',
+            current: current.wind,
+            previous: previous.wind,
+            unit: ' m/s'
+        }
+    ];
+
+    container.innerHTML =
+        metrics.map(
+            metric => {
+
+                if (
+                    !Number.isFinite(
+                        Number(metric.current)
+                    ) ||
+                    !Number.isFinite(
+                        Number(metric.previous)
+                    )
+                ) {
+                    return `
+                        <div class="bg-[#1b1f30] border border-[#262a40] rounded-xl p-4">
+                            <p class="text-xs text-gray-500">
+                                ${metric.name}
+                            </p>
+                            <p class="text-sm text-gray-500 mt-2">
+                                Comparison unavailable
+                            </p>
+                        </div>
+                    `;
+                }
+
+                const change =
+                    analyticsPercentChange(
+                        metric.current,
+                        metric.previous
+                    );
+
+                const changeText =
+                    change === null
+                        ? 'Unavailable'
+                        : change > 0
+                            ? `↑ ${Math.abs(change).toFixed(1)}%`
+                            : change < 0
+                                ? `↓ ${Math.abs(change).toFixed(1)}%`
+                                : '0%';
+
+                const changeClass =
+                    change > 0
+                        ? 'text-red-400'
+                        : change < 0
+                            ? 'text-green-400'
+                            : 'text-gray-400';
+
+                return `
+                    <div class="bg-[#1b1f30] border border-[#262a40] rounded-xl p-4">
+
+                        <p class="text-xs text-gray-500">
+                            ${metric.name}
+                        </p>
+
+                        <div class="flex items-end justify-between gap-3 mt-2">
+
+                            <div>
+                                <p class="text-white font-semibold">
+                                    ${Number(metric.current).toFixed(1)}${metric.unit}
+                                </p>
+
+                                <p class="text-[11px] text-gray-500">
+                                    Previous:
+                                    ${Number(metric.previous).toFixed(1)}${metric.unit}
+                                </p>
+                            </div>
+
+                            <span class="text-sm font-semibold ${changeClass}">
+                                ${changeText}
+                            </span>
+
+                        </div>
+
+                    </div>
+                `;
+            }
+        ).join('');
+}
+
+
+async function fetchAnalyticsWeather(
+    city,
+    days,
+    previous = false
+
+) {
+
+    /*
+     * Use the existing application's weather
+     * endpoint first.
+     *
+     * The backend must return historical/current
+     * observations for the requested period.
+     */
+    const url =
+    `/api/weather-analytics?city=${encodeURIComponent(city)}&days=${encodeURIComponent(days)}&previous=${previous ? 1 : 0}`;
+
+    const response =
+        await fetch(url);
+
+    const contentType =
+        response.headers.get('content-type') || '';
+
+    if (
+        !response.ok ||
+        !contentType.includes('application/json')
+    ) {
+        throw new Error(
+            'Historical analytics data is not available from the server.'
+        );
+    }
+
+    const data =
+        await response.json();
+
+    if (
+        !data ||
+        (!Array.isArray(data.list) &&
+         !Array.isArray(data.data))
+    ) {
+        throw new Error(
+            'The analytics API returned no usable historical data.'
+        );
+    }
+
+    return data;
+}
+
+
+function normalizeAnalyticsResponse(data) {
+
+    const list =
+        Array.isArray(data.list)
+            ? data.list
+            : Array.isArray(data.data)
+                ? data.data
+                : [];
+
+    return list
+        .map(item => {
+
+            // Backend /api/weather-analytics format
+            if (
+                item &&
+                (
+                    item.avg_temp !== undefined ||
+                    item.max_temp !== undefined ||
+                    item.min_temp !== undefined
+                )
+            ) {
+
+                const timestamp =
+                    item.date
+                        ? new Date(
+                            `${item.date}T00:00:00`
+                        ).getTime() / 1000
+                        : null;
+
+                return {
+                    dt:
+                        Number.isFinite(timestamp)
+                            ? timestamp
+                            : null,
+
+                    temp:
+                        Number(
+                            item.avg_temp
+                        ),
+
+                    humidity:
+                        item.humidity !== null &&
+                        item.humidity !== undefined
+                            ? Number(
+                                item.humidity
+                            )
+                            : null,
+
+                    wind:
+                        item.wind !== null &&
+                        item.wind !== undefined
+                            ? Number(
+                                item.wind
+                            )
+                            : null,
+
+                    rainfall:
+                        item.rainfall !== null &&
+                        item.rainfall !== undefined
+                            ? Number(
+                                item.rainfall
+                            )
+                            : 0,
+
+                    avg_temp:
+                        item.avg_temp !== null &&
+                        item.avg_temp !== undefined
+                            ? Number(
+                                item.avg_temp
+                            )
+                            : null,
+
+                    max_temp:
+                        item.max_temp !== null &&
+                        item.max_temp !== undefined
+                            ? Number(
+                                item.max_temp
+                            )
+                            : null,
+
+                    min_temp:
+                        item.min_temp !== null &&
+                        item.min_temp !== undefined
+                            ? Number(
+                                item.min_temp
+                            )
+                            : null
+                };
+            }
+
+            // Compatibility with OpenWeather-style data
+            const timestamp =
+                Number(
+                    item.dt ||
+                    item.timestamp ||
+                    item.time
+                );
+
+            const main =
+                item.main || {};
+
+            const wind =
+                item.wind || {};
+
+            const temp =
+                Number(
+                    main.temp ??
+                    item.temp
+                );
+
+            const humidity =
+                Number(
+                    main.humidity ??
+                    item.humidity
+                );
+
+            const windSpeed =
+                Number(
+                    wind.speed ??
+                    item.wind_speed
+                );
+
+            const rainfall =
+                Number(
+                    item.rainfall ??
+                    item.rain?.['1h'] ??
+                    item.rain?.['3h'] ??
+                    0
+                );
+
+            return {
+                dt:
+                    Number.isFinite(timestamp)
+                        ? timestamp
+                        : null,
+
+                temp,
+
+                humidity:
+                    Number.isFinite(humidity)
+                        ? humidity
+                        : null,
+
+                wind:
+                    Number.isFinite(windSpeed)
+                        ? windSpeed
+                        : null,
+
+                rainfall:
+                    Number.isFinite(rainfall)
+                        ? rainfall
+                        : 0,
+
+                avg_temp:
+                    Number.isFinite(temp)
+                        ? temp
+                        : null,
+
+                max_temp:
+                    Number.isFinite(temp)
+                        ? temp
+                        : null,
+
+                min_temp:
+                    Number.isFinite(temp)
+                        ? temp
+                        : null
+            };
+        })
+        .filter(
+            item =>
+                Number.isFinite(item.dt) &&
+                (
+                    Number.isFinite(item.temp) ||
+                    Number.isFinite(item.avg_temp)
+                )
+        );
+}
+
+
+function buildAnalyticsSeries(records) {
+
+    const groups = {};
+
+    if (
+        !Array.isArray(records) ||
+        records.length === 0
+    ) {
+        return {
+            labels: [],
+            avgTemps: [],
+            maxTemps: [],
+            minTemps: [],
+            rainfall: [],
+            humidity: [],
+            wind: []
+        };
+    }
+
+    // Group records by date
+    records.forEach(record => {
+
+        if (
+            !record ||
+            !Number.isFinite(Number(record.dt))
+        ) {
+            return;
+        }
+
+        const date =
+            new Date(
+                Number(record.dt) * 1000
+            );
+
+        const key =
+            date.toISOString().slice(0, 10);
+
+        if (!groups[key]) {
+            groups[key] = [];
+        }
+
+        groups[key].push(record);
+    });
+
+    const dates =
+        Object.keys(groups).sort();
+
+    const labels = [];
+    const avgTemps = [];
+    const maxTemps = [];
+    const minTemps = [];
+    const rainfall = [];
+    const humidity = [];
+    const wind = [];
+
+    dates.forEach(date => {
+
+        const items =
+            groups[date];
+
+        // ------------------------------------------
+        // Average Temperature
+        // ------------------------------------------
+
+        const averageTemperatureValues =
+            items
+                .map(item => {
+
+                    const value =
+                        item.avg_temp ??
+                        item.temp;
+
+                    return Number(value);
+
+                })
+                .filter(
+                    Number.isFinite
+                );
+
+
+        // ------------------------------------------
+        // Maximum Temperature
+        // ------------------------------------------
+
+        const maximumTemperatureValues =
+            items
+                .map(item => {
+
+                    const value =
+                        item.max_temp ??
+                        item.temp;
+
+                    return Number(value);
+
+                })
+                .filter(
+                    Number.isFinite
+                );
+
+
+        // ------------------------------------------
+        // Minimum Temperature
+        // ------------------------------------------
+
+        const minimumTemperatureValues =
+            items
+                .map(item => {
+
+                    const value =
+                        item.min_temp ??
+                        item.temp;
+
+                    return Number(value);
+
+                })
+                .filter(
+                    Number.isFinite
+                );
+
+
+        // ------------------------------------------
+        // Rainfall
+        // ------------------------------------------
+
+        const rainfallValues =
+            items
+                .map(item =>
+                    Number(
+                        item.rainfall
+                    )
+                )
+                .filter(
+                    Number.isFinite
+                );
+
+
+        // ------------------------------------------
+        // Humidity
+        // ------------------------------------------
+
+        const humidityValues =
+            items
+                .map(item =>
+                    Number(
+                        item.humidity
+                    )
+                )
+                .filter(
+                    Number.isFinite
+                );
+
+
+        // ------------------------------------------
+        // Wind
+        // ------------------------------------------
+
+        const windValues =
+            items
+                .map(item =>
+                    Number(
+                        item.wind
+                    )
+                )
+                .filter(
+                    Number.isFinite
+                );
+
+
+        // ------------------------------------------
+        // Ignore date only if temperature
+        // information is completely missing.
+        // No fake values are created.
+        // ------------------------------------------
+
+        if (
+            averageTemperatureValues.length === 0 &&
+            maximumTemperatureValues.length === 0 &&
+            minimumTemperatureValues.length === 0
+        ) {
+            return;
+        }
+
+
+        // ------------------------------------------
+        // Label
+        // ------------------------------------------
+
+        const labelDate =
+            new Date(
+                `${date}T00:00:00`
+            );
+
+        labels.push(
+            labelDate.toLocaleDateString(
+                undefined,
+                {
+                    day: 'numeric',
+                    month: 'short'
+                }
+            )
+        );
+
+
+        // ------------------------------------------
+        // Average temperature
+        // ------------------------------------------
+
+        if (
+            averageTemperatureValues.length
+        ) {
+
+            const average =
+                averageTemperatureValues.reduce(
+                    (sum, value) =>
+                        sum + value,
+                    0
+                ) /
+                averageTemperatureValues.length;
+
+            avgTemps.push(
+                Number(
+                    average.toFixed(1)
+                )
+            );
+
+        } else {
+
+            avgTemps.push(null);
+        }
+
+
+        // ------------------------------------------
+        // Maximum temperature
+        // ------------------------------------------
+
+        if (
+            maximumTemperatureValues.length
+        ) {
+
+            maxTemps.push(
+                Number(
+                    Math.max(
+                        ...maximumTemperatureValues
+                    ).toFixed(1)
+                )
+            );
+
+        } else {
+
+            maxTemps.push(null);
+        }
+
+
+        // ------------------------------------------
+        // Minimum temperature
+        // ------------------------------------------
+
+        if (
+            minimumTemperatureValues.length
+        ) {
+
+            minTemps.push(
+                Number(
+                    Math.min(
+                        ...minimumTemperatureValues
+                    ).toFixed(1)
+                )
+            );
+
+        } else {
+
+            minTemps.push(null);
+        }
+
+
+        // ------------------------------------------
+        // Daily rainfall
+        // ------------------------------------------
+
+        rainfall.push(
+            rainfallValues.length
+                ? Number(
+                    rainfallValues
+                        .reduce(
+                            (sum, value) =>
+                                sum + value,
+                            0
+                        )
+                        .toFixed(1)
+                )
+                : null
+        );
+
+
+        // ------------------------------------------
+        // Daily average humidity
+        // ------------------------------------------
+
+        humidity.push(
+            humidityValues.length
+                ? Number(
+                    (
+                        humidityValues.reduce(
+                            (sum, value) =>
+                                sum + value,
+                            0
+                        ) /
+                        humidityValues.length
+                    ).toFixed(1)
+                )
+                : null
+        );
+
+
+        // ------------------------------------------
+        // Daily average wind speed
+        // ------------------------------------------
+
+        wind.push(
+            windValues.length
+                ? Number(
+                    (
+                        windValues.reduce(
+                            (sum, value) =>
+                                sum + value,
+                            0
+                        ) /
+                        windValues.length
+                    ).toFixed(1)
+                )
+                : null
+        );
+    });
+
+
+    return {
+        labels,
+        avgTemps,
+        maxTemps,
+        minTemps,
+        rainfall,
+        humidity,
+        wind
+    };
+}
+
+function calculateSeriesSummary(
+    series
+) {
+
+    const avgTemps =
+        series.avgTemps.filter(
+            Number.isFinite
+        );
+
+    const maxTemps =
+        series.maxTemps.filter(
+            Number.isFinite
+        );
+
+    const minTemps =
+        series.minTemps.filter(
+            Number.isFinite
+        );
+
+    const rainfall =
+        series.rainfall.filter(
+            Number.isFinite
+        );
+
+    const humidity =
+        series.humidity.filter(
+            Number.isFinite
+        );
+
+    const wind =
+        series.wind.filter(
+            Number.isFinite
+        );
+
+    return {
+
+        avgTemp:
+            avgTemps.length
+                ? avgTemps.reduce(
+                    (a, b) =>
+                        a + b,
+                    0
+                ) /
+                avgTemps.length
+                : null,
+
+        maxTemp:
+            maxTemps.length
+                ? Math.max(
+                    ...maxTemps
+                )
+                : null,
+
+        minTemp:
+            minTemps.length
+                ? Math.min(
+                    ...minTemps
+                )
+                : null,
+
+        rainfall:
+            rainfall.reduce(
+                (a, b) =>
+                    a + b,
+                0
+            ),
+
+        humidity:
+            humidity.length
+                ? humidity.reduce(
+                    (a, b) =>
+                        a + b,
+                    0
+                ) /
+                humidity.length
+                : null,
+
+        wind:
+            wind.length
+                ? wind.reduce(
+                    (a, b) =>
+                        a + b,
+                    0
+                ) /
+                wind.length
+                : null
+    };
+}
+
+
+async function loadWeatherAnalytics() {
+
+    const locationSelect =
+        document.getElementById(
+            'analytics-location'
+        );
+
+    const periodSelect =
+        document.getElementById(
+            'analytics-period'
+        );
+
+    const button =
+        document.getElementById(
+            'analytics-load-btn'
+        );
+
+    const results =
+        document.getElementById(
+            'analytics-results'
+        );
+
+    if (
+        !locationSelect ||
+        !periodSelect ||
+        !button ||
+        !results
+    ) {
+        return;
+    }
+
+    const city =
+        locationSelect.value;
+
+    const days =
+        Number(
+            periodSelect.value
+        );
+
+    if (!city) {
+
+        setAnalyticsStatus(
+            'Please select a Gujarat location.',
+            'warning'
+        );
+
+        return;
+    }
+
+    if (
+        !Number.isFinite(days)
+    ) {
+        return;
+    }
+
+    button.disabled = true;
+
+    button.innerHTML =
+        `
+            <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+            Loading Analytics...
+        `;
+
+    setAnalyticsStatus(
+        'Fetching real weather analytics data...',
+        'info'
+    );
+
+    results.classList.add(
+        'hidden'
+    );
+
+    try {
+
+        const currentResponse =
+            await fetchAnalyticsWeather(
+                city,
+                days
+            );
+
+        const records =
+            normalizeAnalyticsResponse(
+                currentResponse
+            );
+
+        if (!records.length) {
+
+            throw new Error(
+                'No historical observations are available for the selected location and period.'
+            );
+        }
+
+        const series =
+            buildAnalyticsSeries(
+                records
+            );
+
+        const currentSummary =
+            calculateSeriesSummary(
+                series
+            );
+
+        let previousSummary =
+            null;
+
+        /*
+         * Previous-period comparison:
+         * ask backend for an equal period immediately
+         * before the selected period.
+         */
+        try {
+
+            const previousResponse =
+                await fetchAnalyticsWeather(
+                    city,
+                    days,
+                    true
+                );
+
+            const previousRecords =
+                normalizeAnalyticsResponse(
+                    previousResponse
+                );
+
+            if (
+                previousRecords.length
+            ) {
+
+                const previousSeries =
+                    buildAnalyticsSeries(
+                        previousRecords
+                    );
+
+                previousSummary =
+                    calculateSeriesSummary(
+                        previousSeries
+                    );
+            }
+
+        } catch (comparisonError) {
+
+            console.warn(
+                'Previous-period comparison unavailable:',
+                comparisonError
+            );
+        }
+
+        updateAnalyticsSummary(
+            currentSummary,
+            previousSummary
+        );
+
+        renderAnalyticsComparison(
+            currentSummary,
+            previousSummary
+        );
+
+        renderAnalyticsCharts(
+            series.labels,
+            series
+        );
+
+        const note =
+            document.getElementById(
+                'analytics-data-note'
+            );
+
+        if (note) {
+
+            const expectedDays =
+                days;
+
+            const actualDays =
+                series.labels.length;
+
+            if (
+                actualDays < expectedDays
+            ) {
+
+                note.innerText =
+                    `Historical data is available for ${actualDays} of the requested ${expectedDays} days. Missing dates are not filled with estimated values.`;
+
+                note.classList.remove(
+                    'hidden'
+                );
+
+            } else {
+
+                note.classList.add(
+                    'hidden'
+                );
+            }
+        }
+
+        results.classList.remove(
+            'hidden'
+        );
+
+        setAnalyticsStatus(
+            `Analytics loaded for ${city}.`,
+            'info'
+        );
+
+    } catch (error) {
+
+        console.error(
+            'Weather Analytics error:',
+            error
+        );
+
+        results.classList.add(
+            'hidden'
+        );
+
+        setAnalyticsStatus(
+            error.message ||
+                'Unable to load historical weather analytics.',
+            'error'
+        );
+
+    } finally {
+
+        button.disabled = false;
+
+        button.innerHTML =
+            `
+                <i class="fa-solid fa-chart-simple mr-2"></i>
+                Analyze Weather
+            `;
+    }
 }

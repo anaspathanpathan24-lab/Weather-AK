@@ -7,9 +7,10 @@ Route::get('/', function () {
     return view('welcome');
 });
 
-// API Routes for Weather Dashboard
-Route::get('/api/weather', [WeatherController::class, 'getWeather']);
-Route::get('/api/historical', [WeatherController::class, 'getHistorical']);
+// API Routes for Weather Dashboard 
+Route::get('/api/weather', [WeatherController::class, 'getWeather']); 
+Route::get('/api/historical', [WeatherController::class, 'getHistorical']); 
+Route::get('/api/weather-analytics', [WeatherController::class, 'getWeatherAnalytics']);
 
 // API Route for AI Assistant
 Route::post('/api/meteorologist', [WeatherController::class, 'askMeteorologist']);
