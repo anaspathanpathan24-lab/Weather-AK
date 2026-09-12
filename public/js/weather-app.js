@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     populateHistoricalDropdowns();
     initInteractiveMap();
     initWeatherAnalytics();
+    initDistrictComparison();
     fetchWeatherData('/api/weather?city=Mahesana');
 });
 
@@ -60,9 +61,9 @@ if (
     tabName !== 'historical' &&
     tabName !== 'ai' &&
     tabName !== 'travel' &&
-    tabName !== 'weather-analytics'
+    tabName !== 'weather-analytics' &&
+    tabName !== 'district-comparison'
 ) {
-
 
         document
             .getElementById('link-dashboard')
@@ -6785,6 +6786,1134 @@ async function loadWeatherAnalytics() {
             `
                 <i class="fa-solid fa-chart-simple mr-2"></i>
                 Analyze Weather
+            `;
+    }
+}
+
+// ==========================================
+// DISTRICT COMPARISON
+// ==========================================
+
+let districtComparisonChartInstances = {
+    temperature: null,
+    humidity: null,
+    risk: null
+};
+
+
+const districtComparisonLocations = [
+    'Mehsana',
+    'Ahmedabad',
+    'Surat',
+    'Rajkot',
+    'Vadodara',
+    'Gandhinagar',
+    'Bhavnagar',
+    'Jamnagar',
+    'Bhuj',
+    'Patan'
+];
+
+
+function initDistrictComparison() {
+
+    const select =
+        document.getElementById(
+            'district-comparison-select'
+        );
+
+    if (!select) return;
+
+    select.innerHTML = '';
+
+    districtComparisonLocations.forEach(
+        location => {
+
+            const option =
+                document.createElement('option');
+
+            option.value = location;
+            option.textContent = location;
+
+            select.appendChild(option);
+        }
+    );
+}
+
+
+function setDistrictComparisonStatus(
+    message,
+    type = 'info'
+) {
+
+    const status =
+        document.getElementById(
+            'district-comparison-status'
+        );
+
+    if (!status) return;
+
+    status.className =
+        'mb-6 p-4 rounded-xl text-sm border';
+
+    if (type === 'error') {
+
+        status.classList.add(
+            'bg-red-500/10',
+            'border-red-500/30',
+            'text-red-400'
+        );
+
+    } else if (type === 'warning') {
+
+        status.classList.add(
+            'bg-yellow-500/10',
+            'border-yellow-500/30',
+            'text-yellow-400'
+        );
+
+    } else {
+
+        status.classList.add(
+            'bg-blue-500/10',
+            'border-blue-500/30',
+            'text-blue-400'
+        );
+    }
+
+    status.innerText =
+        message;
+
+    status.classList.remove(
+        'hidden'
+    );
+}
+
+
+async function fetchDistrictComparisonWeather(
+    city
+) {
+
+    const weatherResponse =
+        await fetch(
+            `/api/weather?city=${encodeURIComponent(city)}`
+        );
+
+    if (!weatherResponse.ok) {
+        throw new Error(
+            `Weather data unavailable for ${city}.`
+        );
+    }
+
+    const weatherData =
+        await weatherResponse.json();
+
+    const current =
+        weatherData.current
+            ? weatherData.current
+            : weatherData;
+
+    if (
+        !current ||
+        !current.main ||
+        !current.weather?.length
+    ) {
+        throw new Error(
+            `Incomplete weather data for ${city}.`
+        );
+    }
+
+    let aqi = null;
+
+    try {
+
+        const lat =
+            Number(
+                current?.coord?.lat
+            );
+
+        const lon =
+            Number(
+                current?.coord?.lon
+            );
+
+        if (
+            Number.isFinite(lat) &&
+            Number.isFinite(lon)
+        ) {
+
+            const aqiResponse =
+                await fetch(
+                    `/api/air-quality?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
+                );
+
+            if (aqiResponse.ok) {
+
+                const aqiData =
+                    await aqiResponse.json();
+
+                if (
+                    aqiData &&
+                    Number.isFinite(
+                        Number(
+                            aqiData.aqi
+                        )
+                    )
+                ) {
+
+                    aqi =
+                        Number(
+                            aqiData.aqi
+                        );
+                }
+            }
+        }
+
+    } catch (aqiError) {
+
+        console.warn(
+            `AQI unavailable for ${city}:`,
+            aqiError
+        );
+    }
+
+    const forecastList =
+        weatherData?.forecast?.list || [];
+
+    const rainProbabilityValues =
+        forecastList
+            .slice(0, 6)
+            .map(item =>
+                Number(
+                    item?.pop || 0
+                )
+            )
+            .filter(
+                Number.isFinite
+            );
+
+    const rainProbability =
+        rainProbabilityValues.length
+            ? Math.max(
+                ...rainProbabilityValues
+            )
+            : null;
+
+    const uvValue =
+        Number(
+            weatherData?.uv?.value
+        );
+
+    return {
+
+        city:
+            current.name ||
+            city,
+
+        temperature:
+            Number(
+                current.main.temp
+            ),
+
+        humidity:
+            Number(
+                current.main.humidity
+            ),
+
+        wind:
+            Number(
+                current.wind?.speed
+            ),
+
+        rainProbability,
+
+        aqi:
+            Number.isFinite(aqi)
+                ? aqi
+                : null,
+
+        uv:
+            Number.isFinite(uvValue)
+                ? uvValue
+                : null,
+
+        condition:
+            current.weather?.[0]
+                ?.description ||
+            'Weather unavailable',
+
+        icon:
+            current.weather?.[0]
+                ?.icon ||
+            '01d'
+    };
+}
+
+
+function getDistrictComparisonStatus(
+    item
+) {
+
+    let riskScore = 0;
+
+    if (
+        Number.isFinite(
+            item.rainProbability
+        )
+    ) {
+
+        if (
+            item.rainProbability >= 0.85
+        ) {
+            riskScore += 4;
+
+        } else if (
+            item.rainProbability >= 0.70
+        ) {
+            riskScore += 2;
+        }
+    }
+
+    if (
+        Number.isFinite(item.wind)
+    ) {
+
+        if (item.wind >= 20) {
+            riskScore += 3;
+
+        } else if (item.wind >= 15) {
+            riskScore += 2;
+
+        } else if (item.wind >= 10) {
+            riskScore += 1;
+        }
+    }
+
+    if (
+        Number.isFinite(item.temperature)
+    ) {
+
+        if (item.temperature >= 42) {
+            riskScore += 3;
+
+        } else if (item.temperature >= 38) {
+            riskScore += 1;
+        }
+    }
+
+    if (
+        Number.isFinite(item.uv)
+    ) {
+
+        if (item.uv >= 11) {
+            riskScore += 3;
+
+        } else if (item.uv >= 8) {
+            riskScore += 2;
+
+        } else if (item.uv >= 6) {
+            riskScore += 1;
+        }
+    }
+
+    if (
+        Number.isFinite(item.aqi)
+    ) {
+
+        if (item.aqi >= 5) {
+            riskScore += 3;
+
+        } else if (item.aqi >= 4) {
+            riskScore += 2;
+
+        } else if (item.aqi >= 3) {
+            riskScore += 1;
+        }
+    }
+
+    if (riskScore >= 7) {
+
+        return {
+            label: 'High Risk',
+            className: 'text-red-400',
+            bgClass: 'bg-red-500/10',
+            borderClass: 'border-red-500/30'
+        };
+
+    }
+
+    if (riskScore >= 3) {
+
+        return {
+            label: 'Caution',
+            className: 'text-yellow-400',
+            bgClass: 'bg-yellow-500/10',
+            borderClass: 'border-yellow-500/30'
+        };
+    }
+
+    return {
+        label: 'Favorable',
+        className: 'text-green-400',
+        bgClass: 'bg-green-500/10',
+        borderClass: 'border-green-500/30'
+    };
+}
+
+
+function destroyDistrictComparisonCharts() {
+
+    Object.keys(
+        districtComparisonChartInstances
+    ).forEach(
+        key => {
+
+            if (
+                districtComparisonChartInstances[
+                    key
+                ]
+            ) {
+
+                districtComparisonChartInstances[
+                    key
+                ].destroy();
+
+                districtComparisonChartInstances[
+                    key
+                ] = null;
+            }
+        }
+    );
+}
+
+
+function renderDistrictComparisonCards(
+    items
+) {
+
+    const container =
+        document.getElementById(
+            'district-comparison-cards'
+        );
+
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    items.forEach(item => {
+
+        const status =
+            getDistrictComparisonStatus(
+                item
+            );
+
+        const rainText =
+            Number.isFinite(
+                item.rainProbability
+            )
+                ? `${Math.round(
+                    item.rainProbability * 100
+                )}%`
+                : 'Unavailable';
+
+        const aqiText =
+            Number.isFinite(item.aqi)
+                ? `${item.aqi}/5`
+                : 'Unavailable';
+
+        const uvText =
+            Number.isFinite(item.uv)
+                ? item.uv.toFixed(1)
+                : 'Unavailable';
+
+        const temperatureText =
+            Number.isFinite(
+                item.temperature
+            )
+                ? `${Math.round(
+                    item.temperature
+                )}°C`
+                : 'Unavailable';
+
+        const humidityText =
+            Number.isFinite(
+                item.humidity
+            )
+                ? `${Math.round(
+                    item.humidity
+                )}%`
+                : 'Unavailable';
+
+        const windText =
+            Number.isFinite(item.wind)
+                ? `${Math.round(
+                    item.wind
+                )} m/s`
+                : 'Unavailable';
+
+        container.innerHTML += `
+            <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+
+                <div class="flex items-center justify-between gap-3 mb-4">
+
+                    <div class="flex items-center gap-3 min-w-0">
+
+                        <img
+                            src="https://openweathermap.org/img/wn/${item.icon}@2x.png"
+                            alt="${escapeHtml(item.condition)}"
+                            class="w-12 h-12 shrink-0"
+                        >
+
+                        <div class="min-w-0">
+
+                            <h4 class="text-white font-semibold truncate">
+                                ${escapeHtml(item.city)}
+                            </h4>
+
+                            <p class="text-xs text-gray-500 capitalize truncate">
+                                ${escapeHtml(item.condition)}
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <span
+                        class="text-[11px] font-semibold px-2.5 py-1 rounded-full ${status.bgClass} ${status.className}"
+                    >
+                        ${status.label}
+                    </span>
+
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+
+                    <div class="bg-[#1b1f30] rounded-xl p-3">
+
+                        <p class="text-[10px] text-gray-500">
+                            Temperature
+                        </p>
+
+                        <p class="text-white font-bold mt-1">
+                            ${temperatureText}
+                        </p>
+
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-3">
+
+                        <p class="text-[10px] text-gray-500">
+                            Humidity
+                        </p>
+
+                        <p class="text-white font-bold mt-1">
+                            ${humidityText}
+                        </p>
+
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-3">
+
+                        <p class="text-[10px] text-gray-500">
+                            Rain Risk
+                        </p>
+
+                        <p class="text-blue-400 font-bold mt-1">
+                            ${rainText}
+                        </p>
+
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-3">
+
+                        <p class="text-[10px] text-gray-500">
+                            Wind
+                        </p>
+
+                        <p class="text-white font-bold mt-1">
+                            ${windText}
+                        </p>
+
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-3">
+
+                        <p class="text-[10px] text-gray-500">
+                            AQI
+                        </p>
+
+                        <p class="text-white font-bold mt-1">
+                            ${aqiText}
+                        </p>
+
+                    </div>
+
+                    <div class="bg-[#1b1f30] rounded-xl p-3">
+
+                        <p class="text-[10px] text-gray-500">
+                            UV Index
+                        </p>
+
+                        <p class="text-white font-bold mt-1">
+                            ${uvText}
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+        `;
+    });
+}
+
+
+function renderDistrictComparisonCharts(
+    items
+) {
+
+    if (
+        typeof Chart === 'undefined'
+    ) {
+
+        console.error(
+            'Chart.js is not loaded.'
+        );
+
+        return;
+    }
+
+    destroyDistrictComparisonCharts();
+
+    const labels =
+        items.map(
+            item =>
+                item.city
+        );
+
+    const axisColor =
+        '#6b7280';
+
+    const gridColor =
+        'rgba(107,114,128,0.15)';
+
+
+    // ------------------------------------------
+    // Temperature
+    // ------------------------------------------
+
+    const temperatureCanvas =
+        document.getElementById(
+            'district-temperature-chart'
+        );
+
+    if (temperatureCanvas) {
+
+        districtComparisonChartInstances.temperature =
+            new Chart(
+                temperatureCanvas,
+                {
+                    type: 'bar',
+
+                    data: {
+
+                        labels,
+
+                        datasets: [
+                            {
+                                label:
+                                    'Temperature °C',
+
+                                data:
+                                    items.map(
+                                        item =>
+                                            Number.isFinite(
+                                                item.temperature
+                                            )
+                                                ? item.temperature
+                                                : null
+                                    ),
+
+                                backgroundColor:
+                                    'rgba(96,165,250,0.65)',
+
+                                borderRadius:
+                                    6
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio:
+                            false,
+
+                        plugins: {
+
+                            legend: {
+                                labels: {
+                                    color:
+                                        '#d1d5db'
+                                }
+                            }
+                        },
+
+                        scales: {
+
+                            x: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            },
+
+                            y: {
+                                beginAtZero:
+                                    false,
+
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+    }
+
+
+    // ------------------------------------------
+    // Humidity
+    // ------------------------------------------
+
+    const humidityCanvas =
+        document.getElementById(
+            'district-humidity-chart'
+        );
+
+    if (humidityCanvas) {
+
+        districtComparisonChartInstances.humidity =
+            new Chart(
+                humidityCanvas,
+                {
+                    type: 'bar',
+
+                    data: {
+
+                        labels,
+
+                        datasets: [
+                            {
+                                label:
+                                    'Humidity %',
+
+                                data:
+                                    items.map(
+                                        item =>
+                                            Number.isFinite(
+                                                item.humidity
+                                            )
+                                                ? item.humidity
+                                                : null
+                                    ),
+
+                                backgroundColor:
+                                    'rgba(167,139,250,0.65)',
+
+                                borderRadius:
+                                    6
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio:
+                            false,
+
+                        plugins: {
+
+                            legend: {
+                                labels: {
+                                    color:
+                                        '#d1d5db'
+                                }
+                            }
+                        },
+
+                        scales: {
+
+                            x: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            },
+
+                            y: {
+                                beginAtZero:
+                                    true,
+
+                                max: 100,
+
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+    }
+
+
+    // ------------------------------------------
+    // Risk Indicators
+    // ------------------------------------------
+
+    const riskCanvas =
+        document.getElementById(
+            'district-risk-chart'
+        );
+
+    if (riskCanvas) {
+
+        districtComparisonChartInstances.risk =
+            new Chart(
+                riskCanvas,
+                {
+                    type: 'bar',
+
+                    data: {
+
+                        labels,
+
+                        datasets: [
+                            {
+                                label:
+                                    'Rain Probability %',
+
+                                data:
+                                    items.map(
+                                        item =>
+                                            Number.isFinite(
+                                                item.rainProbability
+                                            )
+                                                ? item.rainProbability * 100
+                                                : null
+                                    ),
+
+                                backgroundColor:
+                                    'rgba(96,165,250,0.65)',
+
+                                borderRadius:
+                                    5
+                            },
+
+                            {
+                                label:
+                                    'Wind m/s',
+
+                                data:
+                                    items.map(
+                                        item =>
+                                            Number.isFinite(
+                                                item.wind
+                                            )
+                                                ? item.wind
+                                                : null
+                                    ),
+
+                                backgroundColor:
+                                    'rgba(251,191,36,0.65)',
+
+                                borderRadius:
+                                    5
+                            },
+
+                            {
+                                label:
+                                    'AQI',
+
+                                data:
+                                    items.map(
+                                        item =>
+                                            Number.isFinite(
+                                                item.aqi
+                                            )
+                                                ? item.aqi
+                                                : null
+                                    ),
+
+                                backgroundColor:
+                                    'rgba(248,113,113,0.65)',
+
+                                borderRadius:
+                                    5
+                            },
+
+                            {
+                                label:
+                                    'UV Index',
+
+                                data:
+                                    items.map(
+                                        item =>
+                                            Number.isFinite(
+                                                item.uv
+                                            )
+                                                ? item.uv
+                                                : null
+                                    ),
+
+                                backgroundColor:
+                                    'rgba(52,211,153,0.65)',
+
+                                borderRadius:
+                                    5
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        maintainAspectRatio:
+                            false,
+
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+
+                        plugins: {
+
+                            legend: {
+                                labels: {
+                                    color:
+                                        '#d1d5db'
+                                }
+                            }
+                        },
+
+                        scales: {
+
+                            x: {
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            },
+
+                            y: {
+                                beginAtZero:
+                                    true,
+
+                                ticks: {
+                                    color:
+                                        axisColor
+                                },
+
+                                grid: {
+                                    color:
+                                        gridColor
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+    }
+}
+
+
+async function loadDistrictComparison() {
+
+    const select =
+        document.getElementById(
+            'district-comparison-select'
+        );
+
+    const button =
+        document.getElementById(
+            'district-comparison-btn'
+        );
+
+    const results =
+        document.getElementById(
+            'district-comparison-results'
+        );
+
+    if (
+        !select ||
+        !button ||
+        !results
+    ) {
+        return;
+    }
+
+    const selectedLocations =
+        Array.from(
+            select.selectedOptions
+        ).map(
+            option =>
+                option.value
+        );
+
+    if (
+        selectedLocations.length < 2
+    ) {
+
+        setDistrictComparisonStatus(
+            'Please select at least 2 Gujarat districts to compare.',
+            'warning'
+        );
+
+        results.classList.add(
+            'hidden'
+        );
+
+        return;
+    }
+
+    button.disabled = true;
+
+    button.innerHTML =
+        `
+            <i class="fa-solid fa-spinner fa-spin mr-2"></i>
+            Comparing...
+        `;
+
+    setDistrictComparisonStatus(
+        `Fetching real weather data for ${selectedLocations.length} districts...`,
+        'info'
+    );
+
+    results.classList.add(
+        'hidden'
+    );
+
+    try {
+
+        const responses =
+            await Promise.allSettled(
+                selectedLocations.map(
+                    city =>
+                        fetchDistrictComparisonWeather(
+                            city
+                        )
+                )
+            );
+
+        const successful =
+            responses
+                .filter(
+                    result =>
+                        result.status === 'fulfilled'
+                )
+                .map(
+                    result =>
+                        result.value
+                );
+
+        const failedCount =
+            responses.length -
+            successful.length;
+
+        if (!successful.length) {
+
+            throw new Error(
+                'Weather data could not be retrieved for the selected districts.'
+            );
+        }
+
+        renderDistrictComparisonCards(
+            successful
+        );
+
+        renderDistrictComparisonCharts(
+            successful
+        );
+
+        results.classList.remove(
+            'hidden'
+        );
+
+        if (
+            failedCount > 0
+        ) {
+
+            setDistrictComparisonStatus(
+                `Comparison loaded for ${successful.length} districts. Weather data was unavailable for ${failedCount} selected district(s).`,
+                'warning'
+            );
+
+        } else {
+
+            setDistrictComparisonStatus(
+                `Real-time comparison loaded for ${successful.length} Gujarat districts.`,
+                'info'
+            );
+        }
+
+    } catch (error) {
+
+        console.error(
+            'District Comparison error:',
+            error
+        );
+
+        results.classList.add(
+            'hidden'
+        );
+
+        setDistrictComparisonStatus(
+            error.message ||
+                'Unable to compare district weather data.',
+            'error'
+        );
+
+    } finally {
+
+        button.disabled = false;
+
+        button.innerHTML =
+            `
+                <i class="fa-solid fa-chart-column mr-2"></i>
+                Compare Districts
             `;
     }
 }

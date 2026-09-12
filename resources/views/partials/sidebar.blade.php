@@ -46,6 +46,18 @@
     <span>Weather Analytics</span>
 
 </a>
+
+<a href="#"
+   id="link-district-comparison"
+   onclick="switchTab('district-comparison'); toggleMobileSidebar(true); return false;"
+   class="nav-link flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-[#262a40] hover:text-white transition">
+
+    <i class="fa-solid fa-code-compare w-5 text-center"></i>
+
+    <span>District Comparison</span>
+
+</a>
+
 </a>
         <a href="#" onclick="switchTab('ai'); toggleMobileSidebar(true)" class="nav-link flex items-center gap-3 px-4 py-3 hover:bg-[#262a40] hover:text-white rounded-xl transition" id="link-ai">
             <i class="fa-solid fa-robot w-5 text-center"></i><span>Ask meteorologist</span>

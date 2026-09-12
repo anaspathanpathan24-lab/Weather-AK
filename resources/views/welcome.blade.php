@@ -1154,6 +1154,157 @@
 
 </div>
 
+<!-- TAB: DISTRICT COMPARISON -->
+<div id="tab-district-comparison" class="tab-content hidden">
+
+    <div class="w-full max-w-7xl mx-auto">
+
+        <div class="bg-[#1b1f30] p-6 md:p-8 rounded-3xl border border-[#262a40] shadow-xl">
+
+            <!-- Header -->
+            <div class="mb-6">
+
+                <h2 class="text-2xl font-bold text-white">
+                    <i class="fa-solid fa-code-compare text-blue-400 mr-2"></i>
+                    District Comparison
+                </h2>
+
+                <p class="text-sm text-gray-400 mt-1">
+                    Compare real-time weather conditions across major Gujarat districts.
+                </p>
+
+            </div>
+
+            <!-- Location Selection -->
+            <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5 mb-6">
+
+                <div class="flex flex-col md:flex-row md:items-end gap-4">
+
+                    <div class="flex-1">
+
+                        <label
+                            for="district-comparison-select"
+                            class="block text-xs text-gray-400 mb-2"
+                        >
+                            Select Gujarat Districts
+                        </label>
+
+                        <select
+                            id="district-comparison-select"
+                            multiple
+                            size="6"
+                            class="w-full bg-[#1b1f30] text-white border border-[#262a40] px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                        ></select>
+
+                        <p class="text-[11px] text-gray-500 mt-2">
+                            Hold Ctrl (Windows) / Cmd (Mac) to select multiple districts.
+                        </p>
+
+                    </div>
+
+                    <button
+                        id="district-comparison-btn"
+                        type="button"
+                        onclick="loadDistrictComparison()"
+                        class="w-full md:w-auto bg-blue-500 hover:bg-blue-600 disabled:bg-blue-500/50 disabled:cursor-not-allowed text-white font-medium px-6 py-3 rounded-xl transition shadow-lg"
+                    >
+                        <i class="fa-solid fa-chart-column mr-2"></i>
+                        Compare Districts
+                    </button>
+
+                </div>
+
+            </div>
+
+            <!-- Status -->
+            <div
+                id="district-comparison-status"
+                class="hidden mb-6 p-4 rounded-xl text-sm border"
+            ></div>
+
+            <!-- Results -->
+            <div
+                id="district-comparison-results"
+                class="hidden space-y-6"
+            >
+
+                <!-- Comparison Cards -->
+                <div>
+
+                    <h3 class="text-gray-400 font-semibold text-sm uppercase tracking-wider mb-4">
+                        <i class="fa-solid fa-cloud-sun text-blue-400 mr-2"></i>
+                        Live District Conditions
+                    </h3>
+
+                    <div
+                        id="district-comparison-cards"
+                        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+                    ></div>
+
+                </div>
+
+                <!-- Temperature / Humidity Chart -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+
+                        <h3 class="text-white font-semibold mb-1">
+                            Temperature Comparison
+                        </h3>
+
+                        <p class="text-xs text-gray-500 mb-4">
+                            Current temperature across selected districts
+                        </p>
+
+                        <div class="relative h-[300px]">
+                            <canvas id="district-temperature-chart"></canvas>
+                        </div>
+
+                    </div>
+
+                    <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+
+                        <h3 class="text-white font-semibold mb-1">
+                            Humidity Comparison
+                        </h3>
+
+                        <p class="text-xs text-gray-500 mb-4">
+                            Current relative humidity
+                        </p>
+
+                        <div class="relative h-[300px]">
+                            <canvas id="district-humidity-chart"></canvas>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Rain / Wind / AQI / UV Chart -->
+                <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+
+                    <h3 class="text-white font-semibold mb-1">
+                        Weather Risk Indicators
+                    </h3>
+
+                    <p class="text-xs text-gray-500 mb-4">
+                        Rain probability, wind speed, AQI and UV Index
+                    </p>
+
+                    <div class="relative h-[340px]">
+                        <canvas id="district-risk-chart"></canvas>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
         <!-- TAB 4: AI ASSISTANT VIEW -->
         <div id="tab-ai" class="tab-content hidden">
             <div class="w-full max-w-4xl mx-auto bg-[#1b1f30] p-6 md:p-8 rounded-3xl border border-[#262a40] shadow-xl flex flex-col h-[650px]">
