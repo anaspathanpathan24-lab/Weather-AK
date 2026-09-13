@@ -9,6 +9,10 @@ const gujaratDistricts = [
 let currentActiveCity = "";
 let liveDashboardCache = {};
 
+let weatherRiskSelectedCity = "";
+let weatherRiskRequestId = 0;
+let weatherRiskAqiCache = {};
+
 document.addEventListener('DOMContentLoaded', () => {
     renderDistrictsGrid(gujaratDistricts);
     renderFavorites();
@@ -17,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initWeatherAnalytics();
     initDistrictComparison();
     initFarmerAdvisory();
+    initWeatherRiskScore();
     fetchWeatherData('/api/weather?city=Mahesana');
 });
 
@@ -125,23 +130,32 @@ function updateDashboardUI(data) {
     currentActiveCity = current.name;
     liveDashboardCache[current.name] = data;
 
+    // ==========================================
+    // WEATHER RISK SCORE
+    // Refresh Risk Score using the latest
+    // real weather/location data.
+    // ==========================================
+    if (typeof refreshWeatherRiskFromDashboard === 'function') {
+        refreshWeatherRiskFromDashboard(data);
+    }
+
     fetchAirQuality(
-    current?.coord?.lat,
-    current?.coord?.lon
-);
+        current?.coord?.lat,
+        current?.coord?.lon
+    );
 
     document.getElementById('city-name').innerText = current.name;
     document.getElementById('weather-desc').innerText = current.weather[0].description;
     document.getElementById('temp').innerText = Math.round(current.main.temp) + '°';
     document.getElementById('humidity').innerText = current.main.humidity + '%';
     document.getElementById('wind').innerText = current.wind.speed + ' km/h';
-    document.getElementById('pressure').innerText = (current.main.pressure ?? '--') + ' hPa';   
+    document.getElementById('pressure').innerText = (current.main.pressure ?? '--') + ' hPa';
 
     renderHeatStress(
-    current?.main?.temp,
-    current?.main?.feels_like,
-    current?.main?.humidity
-);
+        current?.main?.temp,
+        current?.main?.feels_like,
+        current?.main?.humidity
+    );
 
     if (current.weather[0].icon) {
         document.getElementById('weather-icon').src =
@@ -151,7 +165,8 @@ function updateDashboardUI(data) {
             current.weather[0].description;
     }
 
-    const feelsLikeContainer = document.getElementById('feels-like-container');
+    const feelsLikeContainer =
+        document.getElementById('feels-like-container');
 
     if (current.main.feels_like) {
         document.getElementById('feels-like-temp').innerText =
@@ -167,12 +182,16 @@ function updateDashboardUI(data) {
 
     if (!data.forecast) return;
 
-    document.getElementById('extended-features').classList.replace('hidden', 'flex');
+    document.getElementById('extended-features')
+        .classList.replace('hidden', 'flex');
 
     const forecastList = data.forecast.list;
 
-    const hourlyContainer = document.getElementById('hourly-container');
-    const rainContainer = document.getElementById('rain-container');
+    const hourlyContainer =
+        document.getElementById('hourly-container');
+
+    const rainContainer =
+        document.getElementById('rain-container');
 
     hourlyContainer.innerHTML = '';
     rainContainer.innerHTML = '';
@@ -194,28 +213,42 @@ function updateDashboardUI(data) {
         hourlyContainer.innerHTML += `
             <div class="flex flex-col items-center min-w-[60px] snap-center">
                 <span class="text-xs text-gray-400 mb-2">${timeStr}</span>
-                <img src="${iconUrl}" alt="icon" class="w-8 h-8">
-                <span class="font-semibold text-white mt-2">${temp}°C</span>
+
+                <img
+                    src="${iconUrl}"
+                    alt="icon"
+                    class="w-8 h-8"
+                >
+
+                <span class="font-semibold text-white mt-2">
+                    ${temp}°C
+                </span>
             </div>
         `;
 
         rainContainer.innerHTML += `
             <div class="flex flex-col items-center min-w-[60px] snap-center">
                 <span class="text-xs text-gray-400 mb-2">${timeStr}</span>
+
                 <i class="fa-solid fa-cloud-rain text-blue-400 my-2"></i>
-                <span class="font-semibold text-white">${pop}%</span>
+
+                <span class="font-semibold text-white">
+                    ${pop}%
+                </span>
             </div>
         `;
     });
 
-    const dailyContainer = document.getElementById('daily-container');
+    const dailyContainer =
+        document.getElementById('daily-container');
 
     dailyContainer.innerHTML = '';
 
     const dailyData = {};
 
     forecastList.forEach(item => {
-        const dateStr = item.dt_txt.split(' ')[0];
+        const dateStr =
+            item.dt_txt.split(' ')[0];
 
         if (!dailyData[dateStr]) {
             dailyData[dateStr] = {
@@ -228,152 +261,297 @@ function updateDashboardUI(data) {
                 wind: item.wind.speed
             };
         } else {
-            if (item.main.temp_min < dailyData[dateStr].min) {
-                dailyData[dateStr].min = item.main.temp_min;
+            if (
+                item.main.temp_min <
+                dailyData[dateStr].min
+            ) {
+                dailyData[dateStr].min =
+                    item.main.temp_min;
             }
 
-            if (item.main.temp_max > dailyData[dateStr].max) {
-                dailyData[dateStr].max = item.main.temp_max;
+            if (
+                item.main.temp_max >
+                dailyData[dateStr].max
+            ) {
+                dailyData[dateStr].max =
+                    item.main.temp_max;
             }
 
-            if (item.dt_txt.includes("12:00:00")) {
-                dailyData[dateStr].icon = item.weather[0].icon;
-                dailyData[dateStr].desc = item.weather[0].description;
-                dailyData[dateStr].humidity = item.main.humidity;
-                dailyData[dateStr].wind = item.wind.speed;
+            if (
+                item.dt_txt.includes("12:00:00")
+            ) {
+                dailyData[dateStr].icon =
+                    item.weather[0].icon;
+
+                dailyData[dateStr].desc =
+                    item.weather[0].description;
+
+                dailyData[dateStr].humidity =
+                    item.main.humidity;
+
+                dailyData[dateStr].wind =
+                    item.wind.speed;
             }
         }
     });
 
-    const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const dayNames = [
+        'SUN',
+        'MON',
+        'TUE',
+        'WED',
+        'THU',
+        'FRI',
+        'SAT'
+    ];
 
-    Object.keys(dailyData).slice(0, 7).forEach(date => {
-        const dayObj = dailyData[date];
+    Object.keys(dailyData)
+        .slice(0, 7)
+        .forEach(date => {
 
-        const dayName =
-            dayNames[new Date(dayObj.dt * 1000).getDay()];
+            const dayObj =
+                dailyData[date];
 
-        const dateFormatted =
-            new Date(dayObj.dt * 1000).toLocaleDateString('en-GB', {
-                day: '2-digit',
-                month: 'short'
-            });
+            const dayName =
+                dayNames[
+                    new Date(
+                        dayObj.dt * 1000
+                    ).getDay()
+                ];
 
-        const safeData = JSON.stringify({
-            date: `${dayName}, ${dateFormatted}`,
-            desc: dayObj.desc,
-            icon: dayObj.icon,
-            max: Math.round(dayObj.max),
-            min: Math.round(dayObj.min),
-            humidity: dayObj.humidity,
-            wind: dayObj.wind
-        }).replace(/"/g, '&quot;');
+            const dateFormatted =
+                new Date(
+                    dayObj.dt * 1000
+                ).toLocaleDateString(
+                    'en-GB',
+                    {
+                        day: '2-digit',
+                        month: 'short'
+                    }
+                );
 
-        dailyContainer.innerHTML += `
-            <div onclick="showForecastDetails('${safeData}')"
-                 class="flex items-center justify-between p-3 rounded-2xl hover:bg-[#262a40] cursor-pointer transition border border-transparent hover:border-[#32364a] mb-1">
+            const safeData =
+                JSON.stringify({
+                    date:
+                        `${dayName}, ${dateFormatted}`,
 
-                <div class="flex flex-col w-20">
-                    <span class="text-sm font-bold text-gray-200">${dayName}</span>
-                    <span class="text-xs text-gray-500">${dateFormatted}</span>
+                    desc:
+                        dayObj.desc,
+
+                    icon:
+                        dayObj.icon,
+
+                    max:
+                        Math.round(
+                            dayObj.max
+                        ),
+
+                    min:
+                        Math.round(
+                            dayObj.min
+                        ),
+
+                    humidity:
+                        dayObj.humidity,
+
+                    wind:
+                        dayObj.wind
+                }).replace(
+                    /"/g,
+                    '&quot;'
+                );
+
+            dailyContainer.innerHTML += `
+                <div
+                    onclick="showForecastDetails('${safeData}')"
+                    class="flex items-center justify-between p-3 rounded-2xl hover:bg-[#262a40] cursor-pointer transition border border-transparent hover:border-[#32364a] mb-1"
+                >
+
+                    <div class="flex flex-col w-20">
+
+                        <span class="text-sm font-bold text-gray-200">
+                            ${dayName}
+                        </span>
+
+                        <span class="text-xs text-gray-500">
+                            ${dateFormatted}
+                        </span>
+
+                    </div>
+
+                    <div class="flex items-center gap-3 flex-1">
+
+                        <img
+                            src="https://openweathermap.org/img/wn/${dayObj.icon}.png"
+                            class="w-8 h-8"
+                        >
+
+                        <span class="text-xs text-blue-100 capitalize hidden sm:block truncate">
+                            ${dayObj.desc}
+                        </span>
+
+                    </div>
+
+                    <div class="flex gap-3 justify-end w-20">
+
+                        <span class="text-sm font-bold text-white">
+                            ${Math.round(dayObj.max)}°
+                        </span>
+
+                        <span class="text-sm font-medium text-gray-500">
+                            ${Math.round(dayObj.min)}°
+                        </span>
+
+                    </div>
+
                 </div>
-
-                <div class="flex items-center gap-3 flex-1">
-                    <img src="https://openweathermap.org/img/wn/${dayObj.icon}.png"
-                         class="w-8 h-8">
-
-                    <span class="text-xs text-blue-100 capitalize hidden sm:block truncate">
-                        ${dayObj.desc}
-                    </span>
-                </div>
-
-                <div class="flex gap-3 justify-end w-20">
-                    <span class="text-sm font-bold text-white">
-                        ${Math.round(dayObj.max)}°
-                    </span>
-
-                    <span class="text-sm font-medium text-gray-500">
-                        ${Math.round(dayObj.min)}°
-                    </span>
-                </div>
-            </div>
-        `;
-    });
-
-   renderUvIndex(data.uv);
-
-    const sunContainer = document.getElementById('sun-tracking-container');
-
-    if (current.sys && current.sys.sunrise && current.sys.sunset) {
-        const srDate = new Date(current.sys.sunrise * 1000);
-        const ssDate = new Date(current.sys.sunset * 1000);
-
-        const srTime = srDate.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
+            `;
         });
 
-        const ssTime = ssDate.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+    renderUvIndex(data.uv);
 
-        const diffMs = ssDate - srDate;
+    const sunContainer =
+        document.getElementById(
+            'sun-tracking-container'
+        );
 
-        const hrs = Math.floor(diffMs / 3600000);
-        const mins = Math.floor((diffMs % 3600000) / 60000);
+    if (
+        current.sys &&
+        current.sys.sunrise &&
+        current.sys.sunset
+    ) {
+
+        const srDate =
+            new Date(
+                current.sys.sunrise * 1000
+            );
+
+        const ssDate =
+            new Date(
+                current.sys.sunset * 1000
+            );
+
+        const srTime =
+            srDate.toLocaleTimeString(
+                [],
+                {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }
+            );
+
+        const ssTime =
+            ssDate.toLocaleTimeString(
+                [],
+                {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }
+            );
+
+        const diffMs =
+            ssDate - srDate;
+
+        const hrs =
+            Math.floor(
+                diffMs / 3600000
+            );
+
+        const mins =
+            Math.floor(
+                (diffMs % 3600000) /
+                60000
+            );
 
         sunContainer.innerHTML = `
             <div class="flex items-center justify-between border-b border-[#262a40] pb-2">
+
                 <span class="text-sm text-gray-400">
                     <i class="fa-solid fa-sun text-yellow-500 mr-2"></i>
                     Sunrise
                 </span>
-                <span class="font-bold text-white">${srTime}</span>
+
+                <span class="font-bold text-white">
+                    ${srTime}
+                </span>
+
             </div>
 
             <div class="flex items-center justify-between border-b border-[#262a40] pb-2">
+
                 <span class="text-sm text-gray-400">
                     <i class="fa-solid fa-moon text-blue-300 mr-2"></i>
                     Sunset
                 </span>
-                <span class="font-bold text-white">${ssTime}</span>
+
+                <span class="font-bold text-white">
+                    ${ssTime}
+                </span>
+
             </div>
 
             <div class="flex items-center justify-between">
+
                 <span class="text-sm text-gray-400">
                     <i class="fa-solid fa-stopwatch text-green-400 mr-2"></i>
                     Daylight
                 </span>
-                <span class="font-bold text-white">${hrs}h ${mins}m</span>
+
+                <span class="font-bold text-white">
+                    ${hrs}h ${mins}m
+                </span>
+
             </div>
         `;
     }
 
+    // ==========================================
     // Temperature Trend Graph
+    // ==========================================
     const graphContainer =
-        document.getElementById('temp-graph-container');
+        document.getElementById(
+            'temp-graph-container'
+        );
 
-    const graphData = forecastList.slice(0, 6);
+    const graphData =
+        forecastList.slice(0, 6);
 
     if (graphContainer) {
+
         if (graphData.length > 0) {
-            const temps = graphData.map(item => {
-                const value = Number(item?.main?.temp);
-                return Number.isFinite(value) ? Math.round(value) : null;
-            });
+
+            const temps =
+                graphData.map(item => {
+
+                    const value =
+                        Number(
+                            item?.main?.temp
+                        );
+
+                    return Number.isFinite(value)
+                        ? Math.round(value)
+                        : null;
+                });
 
             if (temps.every(t => t !== null)) {
-                const minT = Math.min(...temps) - 2;
-                const maxT = Math.max(...temps) + 2;
-                const range = (maxT - minT) || 1;
+
+                const minT =
+                    Math.min(...temps) - 2;
+
+                const maxT =
+                    Math.max(...temps) + 2;
+
+                const range =
+                    (maxT - minT) || 1;
 
                 const width = 600;
                 const height = 100;
 
                 const step =
                     temps.length > 1
-                        ? width / (temps.length - 1)
+                        ? width / (
+                            temps.length - 1
+                        )
                         : width;
 
                 const points = [];
@@ -383,27 +561,43 @@ function updateDashboardUI(data) {
                         viewBox="-20 0 640 120"
                         class="w-full min-w-[500px] h-full overflow-visible"
                         role="img"
-                        aria-label="Temperature trend">
+                        aria-label="Temperature trend"
+                    >
                 `;
 
                 temps.forEach((t, i) => {
-                    const x = i * step;
+
+                    const x =
+                        i * step;
 
                     const y =
                         height -
-                        ((t - minT) / range) * (height - 30) -
+                        (
+                            (t - minT) /
+                            range
+                        ) *
+                        (height - 30) -
                         20;
 
-                    points.push(`${x},${y}`);
+                    points.push(
+                        `${x},${y}`
+                    );
 
-                    const rawTime = graphData[i]?.dt;
+                    const rawTime =
+                        graphData[i]?.dt;
 
-                    const timeStr = rawTime
-                        ? new Date(rawTime * 1000).toLocaleTimeString([], {
-                              hour: 'numeric',
-                              hour12: true
-                          })
-                        : '--';
+                    const timeStr =
+                        rawTime
+                            ? new Date(
+                                rawTime * 1000
+                            ).toLocaleTimeString(
+                                [],
+                                {
+                                    hour: 'numeric',
+                                    hour12: true
+                                }
+                            )
+                            : '--';
 
                     svgHtml += `
                         <text
@@ -412,7 +606,8 @@ function updateDashboardUI(data) {
                             fill="white"
                             font-size="14"
                             font-weight="bold"
-                            text-anchor="middle">
+                            text-anchor="middle"
+                        >
                             ${t}°
                         </text>
 
@@ -420,15 +615,16 @@ function updateDashboardUI(data) {
                             cx="${x}"
                             cy="${y}"
                             r="4"
-                            fill="#3b82f6">
-                        </circle>
+                            fill="#3b82f6"
+                        ></circle>
 
                         <text
                             x="${x}"
                             y="${height + 15}"
                             fill="#9ca3af"
                             font-size="12"
-                            text-anchor="middle">
+                            text-anchor="middle"
+                        >
                             ${timeStr}
                         </text>
                     `;
@@ -441,49 +637,65 @@ function updateDashboardUI(data) {
                         stroke="#3b82f6"
                         stroke-width="3"
                         stroke-linecap="round"
-                        stroke-linejoin="round" />
+                        stroke-linejoin="round"
+                    />
                 `;
 
                 svgHtml += '</svg>';
 
-                graphContainer.innerHTML = svgHtml;
+                graphContainer.innerHTML =
+                    svgHtml;
+
             } else {
+
                 graphContainer.innerHTML =
                     '<p class="text-sm text-gray-400">Temperature data unavailable.</p>';
             }
+
         } else {
+
             graphContainer.innerHTML =
                 '<p class="text-sm text-gray-400">Temperature forecast unavailable.</p>';
         }
     }
 
-        
+    // ==========================================
     // Weather Alerts
-   renderWeatherAlerts(
-       current,
-       forecastList,
-       Number(data?.uv?.value)
+    // ==========================================
+    renderWeatherAlerts(
+        current,
+        forecastList,
+        Number(data?.uv?.value)
     );
 
+    // ==========================================
+    // Farmer Weather Advisory
+    // ==========================================
     const farmerCity =
-    document.getElementById('farmer-city')?.value;
+        document.getElementById(
+            'farmer-city'
+        )?.value;
 
-const farmerCrop =
-    document.getElementById('farmer-crop')?.value;
+    const farmerCrop =
+        document.getElementById(
+            'farmer-crop'
+        )?.value;
 
-if (
-    farmerCity &&
-    farmerCrop &&
-    farmerCity.toLowerCase() ===
-        String(current?.name || '').toLowerCase()
-) {
-    renderFarmerAdvisory(
-        data,
-        farmerCrop
-    );
+    if (
+        farmerCity &&
+        farmerCrop &&
+        farmerCity.toLowerCase() ===
+            String(
+                current?.name || ''
+            ).toLowerCase()
+    ) {
+
+        renderFarmerAdvisory(
+            data,
+            farmerCrop
+        );
+    }
 }
-
- }
 
  // ==========================================
 // DYNAMIC UV INDEX
@@ -2203,18 +2415,26 @@ window.addEventListener(
    ========================================================= */
 
 async function fetchAirQuality(lat, lon) {
-    const content = document.getElementById('aqi-content');
+    const content =
+        document.getElementById('aqi-content');
 
     if (!content) return;
 
-    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lon))) {
-        showAQIState('error', 'Location coordinates are unavailable.');
+    if (
+        !Number.isFinite(Number(lat)) ||
+        !Number.isFinite(Number(lon))
+    ) {
+        showAQIState(
+            'error',
+            'Location coordinates are unavailable.'
+        );
         return;
     }
 
     showAQIState('loading');
 
     try {
+
         const response = await fetch(
             `/api/air-quality?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`,
             {
@@ -2225,44 +2445,96 @@ async function fetchAirQuality(lat, lon) {
             }
         );
 
-        const contentType = response.headers.get('content-type') || '';
-        const data = contentType.includes('application/json')
-            ? await response.json()
-            : {};
+        const contentType =
+            response.headers.get('content-type') || '';
+
+        const data =
+            contentType.includes('application/json')
+                ? await response.json()
+                : {};
 
         if (!response.ok) {
             throw new Error(
-                data.error || data.message || `AQI request failed (${response.status})`
+                data.error ||
+                data.message ||
+                `AQI request failed (${response.status})`
             );
         }
 
         if (!data.aqi || !data.components) {
-            throw new Error('Air quality data is incomplete.');
+            throw new Error(
+                'Air quality data is incomplete.'
+            );
         }
 
+        // ==========================================
+        // Existing AQI Card
+        // ==========================================
         renderAQICard(data);
 
-        const dashboardData = liveDashboardCache[currentActiveCity];
+        // ==========================================
+        // WEATHER RISK SCORE
+        // Cache the real AQI response so the Risk
+        // Score can reuse it without another AQI call.
+        // ==========================================
+        const riskAqiKey =
+            String(currentActiveCity || '')
+                .trim()
+                .toLowerCase();
 
-const dashboardCurrent =
-    dashboardData?.current
-        ? dashboardData.current
-        : dashboardData;
+        if (riskAqiKey) {
+            weatherRiskAqiCache[riskAqiKey] = data;
+        }
 
-if (dashboardCurrent) {
+        // ==========================================
+        // Weather Alerts
+        // ==========================================
+        const dashboardData =
+            liveDashboardCache[currentActiveCity];
 
-    renderWeatherAlerts(
-        dashboardCurrent,
-        dashboardData?.forecast?.list || [],
-        Number(dashboardData?.uv?.value),
-        data
-    );
+        const dashboardCurrent =
+            dashboardData?.current
+                ? dashboardData.current
+                : dashboardData;
 
-}
+        if (dashboardCurrent) {
+
+            renderWeatherAlerts(
+                dashboardCurrent,
+                dashboardData?.forecast?.list || [],
+                Number(dashboardData?.uv?.value),
+                data
+            );
+
+        }
+
+        // ==========================================
+        // WEATHER RISK SCORE
+        // Refresh Risk Score with the newly loaded
+        // real AQI data.
+        // ==========================================
+        if (
+            dashboardData &&
+            typeof refreshWeatherRiskFromDashboard === 'function'
+        ) {
+            refreshWeatherRiskFromDashboard(
+                dashboardData,
+                data
+            );
+        }
 
     } catch (error) {
-        console.error('AQI error:', error);
-        showAQIState('error', error.message || 'Unable to load air quality data.');
+
+        console.error(
+            'AQI error:',
+            error
+        );
+
+        showAQIState(
+            'error',
+            error.message ||
+            'Unable to load air quality data.'
+        );
     }
 }
 
@@ -8178,3 +8450,650 @@ async function loadDistrictComparison() {
             `;
     }
 }
+
+// ==========================================
+// WEATHER RISK SCORE
+// ==========================================
+
+function initWeatherRiskScore() {
+    const select = document.getElementById('weather-risk-city');
+    const state = document.getElementById('weather-risk-state');
+    const results = document.getElementById('weather-risk-results');
+
+    if (!select) return;
+
+    select.innerHTML = `
+        <option value="" selected disabled>
+            Select Gujarat City / District
+        </option>
+    `;
+
+    // Reuse the exact same locations used by Gujarat Weather Explorer.
+    gujaratDistricts.forEach(location => {
+        const option = document.createElement('option');
+        option.value = location;
+        option.textContent = location;
+        select.appendChild(option);
+    });
+
+    select.value = '';
+    weatherRiskSelectedCity = '';
+
+    if (results) {
+        results.classList.add('hidden');
+    }
+
+    if (state) {
+        state.className =
+            'p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-500 text-sm';
+        state.innerHTML =
+            'Select a Gujarat city/district to view the Weather Risk Score.';
+    }
+
+    select.addEventListener('change', async () => {
+        const city = String(select.value || '').trim();
+
+        if (!city) return;
+
+        weatherRiskSelectedCity = city;
+        await loadWeatherRiskScore(city);
+    });
+}
+
+function weatherRiskClamp(value, min = 0, max = 100) {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+        return null;
+    }
+
+    return Math.max(min, Math.min(max, number));
+}
+
+function weatherRiskCategory(score) {
+    if (score <= 25) {
+        return {
+            label: 'Low',
+            color: '#4ade80',
+            icon: 'fa-shield-heart'
+        };
+    }
+
+    if (score <= 50) {
+        return {
+            label: 'Moderate',
+            color: '#facc15',
+            icon: 'fa-triangle-exclamation'
+        };
+    }
+
+    if (score <= 75) {
+        return {
+            label: 'High',
+            color: '#fb923c',
+            icon: 'fa-circle-exclamation'
+        };
+    }
+
+    return {
+        label: 'Severe',
+        color: '#f87171',
+        icon: 'fa-skull-crossbones'
+    };
+}
+
+function weatherRiskSeverity(score) {
+    if (score <= 25) return 'Low';
+    if (score <= 50) return 'Moderate';
+    if (score <= 75) return 'High';
+    return 'Severe';
+}
+
+function weatherRiskTemperatureScore(tempC) {
+    if (!Number.isFinite(tempC)) return null;
+    if (tempC <= 24) return 0;
+    if (tempC <= 30) return Math.round((tempC - 24) * 4);
+    if (tempC <= 36) return Math.round(24 + (tempC - 30) * 7.7);
+    if (tempC <= 42) return Math.round(70 + (tempC - 36) * 5);
+    return 100;
+}
+
+function weatherRiskRainScore(pop) {
+    if (!Number.isFinite(pop)) return null;
+    return Math.round(weatherRiskClamp(pop * 100));
+}
+
+function weatherRiskThunderstormScore(data) {
+    const current = data?.current || data || {};
+    const forecast = Array.isArray(data?.forecast?.list)
+        ? data.forecast.list.slice(0, 6)
+        : [];
+
+    const currentId = Number(current?.weather?.[0]?.id);
+    const currentHasStorm =
+        Number.isFinite(currentId) && currentId >= 200 && currentId <= 232;
+
+    if (currentHasStorm) {
+        return 95;
+    }
+
+    const forecastHasStorm = forecast.some(item => {
+        const id = Number(item?.weather?.[0]?.id);
+        return Number.isFinite(id) && id >= 200 && id <= 232;
+    });
+
+    return forecastHasStorm ? 85 : 0;
+}
+
+function weatherRiskWindScore(speedKmh, gustKmh) {
+    const values = [speedKmh, gustKmh].filter(Number.isFinite);
+
+    if (!values.length) return null;
+
+    const peak = Math.max(...values);
+
+    if (peak <= 20) return 0;
+    if (peak <= 40) return Math.round((peak - 20) * 2.5);
+    if (peak <= 60) return Math.round(50 + (peak - 40) * 1.25);
+    if (peak <= 80) return Math.round(75 + (peak - 60) * 1.25);
+    return 100;
+}
+
+function weatherRiskUvScore(uv) {
+    if (!Number.isFinite(uv)) return null;
+    if (uv <= 2) return Math.round(uv * 8);
+    if (uv <= 5) return Math.round(16 + (uv - 2) * 8);
+    if (uv <= 7) return Math.round(40 + (uv - 5) * 10);
+    if (uv <= 10) return Math.round(60 + (uv - 7) * 10);
+    return 100;
+}
+
+function weatherRiskAqiScore(aqi) {
+    if (!Number.isFinite(aqi)) return null;
+
+    // Existing application AQI endpoint returns AQI on a 1–5 scale.
+    return Math.round(weatherRiskClamp(((aqi - 1) / 4) * 100));
+}
+
+function weatherRiskVisibilityScore(visibilityM) {
+    if (!Number.isFinite(visibilityM)) return null;
+
+    const km = visibilityM / 1000;
+
+    if (km >= 10) return 0;
+    if (km >= 7) return Math.round((10 - km) * 8.33);
+    if (km >= 5) return Math.round(25 + (7 - km) * 12.5);
+    if (km >= 2) return Math.round(50 + (5 - km) * 16.67);
+    if (km >= 1) return Math.round(100 - (km - 1) * 50);
+    return 100;
+}
+
+function weatherRiskBuildFactors(data, aqiData = null) {
+    const current = data?.current || data || {};
+    const forecastList = Array.isArray(data?.forecast?.list)
+        ? data.forecast.list
+        : [];
+
+    const factors = [];
+
+    const temp = Number(current?.main?.temp);
+    const feelsLike = Number(current?.main?.feels_like);
+    const heatTemp = Number.isFinite(feelsLike) ? feelsLike : temp;
+
+    const temperatureScore = weatherRiskTemperatureScore(heatTemp);
+
+    if (temperatureScore !== null) {
+        factors.push({
+            key: 'temperature',
+            name: 'Temperature / Heat',
+            value: `${heatTemp.toFixed(1)}°C`,
+            score: temperatureScore,
+            weight: 18,
+            explanation:
+                temperatureScore > 75
+                    ? 'Very high heat stress risk.'
+                    : temperatureScore > 50
+                        ? 'Elevated heat stress risk.'
+                        : temperatureScore > 25
+                            ? 'Some heat-related risk is present.'
+                            : 'Temperature is currently not a major risk factor.'
+        });
+    }
+
+    const popValues = forecastList
+        .slice(0, 6)
+        .map(item => Number(item?.pop))
+        .filter(value => Number.isFinite(value));
+
+    if (popValues.length) {
+        const rainProbability = Math.max(...popValues);
+        const rainScore = weatherRiskRainScore(rainProbability);
+
+        if (rainScore !== null) {
+            factors.push({
+                key: 'rain',
+                name: 'Rain Probability',
+                value: `${Math.round(rainProbability * 100)}%`,
+                score: rainScore,
+                weight: 18,
+                explanation:
+                    rainScore >= 75
+                        ? 'High probability of rain in the near forecast.'
+                        : rainScore >= 50
+                            ? 'Moderate-to-high rain probability.'
+                            : rainScore >= 25
+                                ? 'Some rain possibility is present.'
+                                : 'Low near-term rain probability.'
+            });
+        }
+    }
+
+    const thunderstormScore = weatherRiskThunderstormScore(data);
+    const hasWeatherCondition = Boolean(current?.weather?.[0]?.id) || forecastList.some(item => Boolean(item?.weather?.[0]?.id));
+
+    if (hasWeatherCondition) {
+        const thunderstormDetected = thunderstormScore > 0;
+
+        factors.push({
+            key: 'thunderstorm',
+            name: 'Thunderstorm Risk',
+            value: thunderstormDetected ? 'Detected' : 'Not detected',
+            score: thunderstormScore,
+            weight: 18,
+            explanation: thunderstormDetected
+                ? 'Thunderstorm weather codes are present in current/near forecast data.'
+                : 'No thunderstorm condition is present in current/near forecast data.'
+        });
+    }
+
+    const windSpeedMs = Number(current?.wind?.speed);
+    const windGustMs = Number(current?.wind?.gust);
+
+    const windSpeedKmh = Number.isFinite(windSpeedMs)
+        ? windSpeedMs * 3.6
+        : null;
+
+    const windGustKmh = Number.isFinite(windGustMs)
+        ? windGustMs * 3.6
+        : null;
+
+    const windScore = weatherRiskWindScore(windSpeedKmh, windGustKmh);
+
+    if (windScore !== null) {
+        let windValue = Number.isFinite(windGustKmh)
+            ? `${windSpeedKmh.toFixed(1)} km/h · gust ${windGustKmh.toFixed(1)} km/h`
+            : `${windSpeedKmh.toFixed(1)} km/h`;
+
+        factors.push({
+            key: 'wind',
+            name: 'Wind / Gust',
+            value: windValue,
+            score: windScore,
+            weight: 14,
+            explanation:
+                windScore >= 75
+                    ? 'Strong wind/gust conditions can increase outdoor and travel risk.'
+                    : windScore >= 50
+                        ? 'Elevated wind conditions are present.'
+                        : windScore >= 25
+                            ? 'Some wind-related caution may be useful.'
+                            : 'Wind conditions are currently relatively low risk.'
+        });
+    }
+
+    const uvValue = Number(data?.uv?.value);
+    const uvScore = weatherRiskUvScore(uvValue);
+
+    if (uvScore !== null) {
+        factors.push({
+            key: 'uv',
+            name: 'UV Index',
+            value: uvValue % 1 === 0 ? String(uvValue) : uvValue.toFixed(1),
+            score: uvScore,
+            weight: 12,
+            explanation:
+                uvScore >= 75
+                    ? 'Very high UV exposure risk.'
+                    : uvScore >= 50
+                        ? 'High UV exposure risk.'
+                        : uvScore >= 25
+                            ? 'Moderate UV exposure risk.'
+                            : 'Low UV exposure risk.'
+        });
+    }
+
+    const aqiValue = Number(aqiData?.aqi);
+    const aqiScore = weatherRiskAqiScore(aqiValue);
+
+    if (aqiScore !== null) {
+        factors.push({
+            key: 'aqi',
+            name: 'AQI',
+            value: `${aqiValue}/5${aqiData?.category ? ` · ${aqiData.category}` : ''}`,
+            score: aqiScore,
+            weight: 12,
+            explanation:
+                aqiScore >= 75
+                    ? 'Air quality is in a high-risk range on the app\'s AQI scale.'
+                    : aqiScore >= 50
+                        ? 'Air quality is elevated on the app\'s AQI scale.'
+                        : aqiScore >= 25
+                            ? 'Air quality presents some exposure risk.'
+                            : 'AQI is currently a low risk contribution.'
+        });
+    }
+
+    const visibilityM = Number(current?.visibility);
+    const visibilityScore = weatherRiskVisibilityScore(visibilityM);
+
+    if (visibilityScore !== null) {
+        factors.push({
+            key: 'visibility',
+            name: 'Visibility',
+            value: `${(visibilityM / 1000).toFixed(1)} km`,
+            score: visibilityScore,
+            weight: 8,
+            explanation:
+                visibilityScore >= 75
+                    ? 'Very poor visibility increases travel/outdoor risk.'
+                    : visibilityScore >= 50
+                        ? 'Reduced visibility contributes noticeable risk.'
+                        : visibilityScore >= 25
+                            ? 'Visibility is somewhat reduced.'
+                            : 'Visibility is currently a low risk contribution.'
+        });
+    }
+
+    return factors;
+}
+
+function weatherRiskCalculateOverall(factors) {
+    if (!Array.isArray(factors) || !factors.length) {
+        return null;
+    }
+
+    const totalWeight = factors.reduce(
+        (sum, factor) => sum + Number(factor.weight || 0),
+        0
+    );
+
+    if (!totalWeight) return null;
+
+    const weightedScore = factors.reduce(
+        (sum, factor) =>
+            sum + (Number(factor.score) * Number(factor.weight || 0)),
+        0
+    );
+
+    return Math.round(weatherRiskClamp(weightedScore / totalWeight));
+}
+
+function weatherRiskRecommendations(factors) {
+    const recommendations = [];
+
+    const byKey = key => factors.find(factor => factor.key === key);
+
+    const temperature = byKey('temperature');
+    const rain = byKey('rain');
+    const thunderstorm = byKey('thunderstorm');
+    const wind = byKey('wind');
+    const uv = byKey('uv');
+    const aqi = byKey('aqi');
+    const visibility = byKey('visibility');
+
+    if (temperature && temperature.score >= 60) {
+        recommendations.push('Avoid prolonged outdoor activity during the hottest part of the day and stay hydrated.');
+    }
+
+    if (rain && rain.score >= 60) {
+        recommendations.push('Keep rain protection ready and allow extra travel time because rain probability is elevated.');
+    }
+
+    if (thunderstorm && thunderstorm.score > 0) {
+        recommendations.push('Avoid exposed outdoor areas and monitor local weather alerts while thunderstorm conditions are present.');
+    }
+
+    if (wind && wind.score >= 50) {
+        recommendations.push('Use extra caution with outdoor work, travel, temporary structures and spraying during stronger winds/gusts.');
+    }
+
+    if (uv && uv.score >= 50) {
+        recommendations.push('Limit direct midday sun exposure and use suitable sun protection while UV risk is elevated.');
+    }
+
+    if (aqi && aqi.score >= 50) {
+        recommendations.push('Reduce prolonged outdoor exposure when air quality is elevated, especially during strenuous activity.');
+    }
+
+    if (visibility && visibility.score >= 50) {
+        recommendations.push('Use extra care while driving because reduced visibility can increase travel risk.');
+    }
+
+    if (!recommendations.length) {
+        recommendations.push('Current available weather factors indicate relatively low overall risk. Continue normal precautions and monitor changes.');
+    }
+
+    return recommendations;
+}
+
+function weatherRiskExplanation(factors) {
+    if (!factors.length) {
+        return 'No sufficient real weather factors are currently available to calculate a score.';
+    }
+
+    const topFactors = [...factors]
+        .sort((a, b) => (b.score * b.weight) - (a.score * a.weight))
+        .filter(factor => factor.score > 0)
+        .slice(0, 3);
+
+    if (!topFactors.length) {
+        return 'The available weather factors are currently contributing little or no risk, so the overall score remains low.';
+    }
+
+    return topFactors
+        .map(factor => `${escapeHtml(factor.name)} (${factor.value}) is contributing ${factor.score}/100 risk.`)
+        .join(' ');
+}
+
+function renderWeatherRiskScore(data, aqiData = null) {
+    const state = document.getElementById('weather-risk-state');
+    const results = document.getElementById('weather-risk-results');
+    const scoreEl = document.getElementById('weather-risk-score');
+    const categoryEl = document.getElementById('weather-risk-category');
+    const progressEl = document.getElementById('weather-risk-progress');
+    const locationEl = document.getElementById('weather-risk-location');
+    const iconEl = document.getElementById('weather-risk-icon');
+    const factorsEl = document.getElementById('weather-risk-factors');
+    const explanationEl = document.getElementById('weather-risk-explanation');
+    const recommendationsEl = document.getElementById('weather-risk-recommendations');
+
+    if (!results || !scoreEl || !categoryEl || !progressEl || !locationEl || !factorsEl || !explanationEl || !recommendationsEl) {
+        return;
+    }
+
+    const current = data?.current || data || {};
+    const cityName = current?.name || weatherRiskSelectedCity || 'Selected location';
+    const factors = weatherRiskBuildFactors(data, aqiData);
+    const score = weatherRiskCalculateOverall(factors);
+
+    if (score === null) {
+        results.classList.add('hidden');
+
+        if (state) {
+            state.className =
+                'p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-sm';
+            state.innerHTML =
+                'Insufficient real weather data is available to calculate a reliable Weather Risk Score for this location.';
+        }
+
+        return;
+    }
+
+    const category = weatherRiskCategory(score);
+
+    results.classList.remove('hidden');
+
+    if (state) {
+        state.className =
+            'p-4 rounded-xl bg-blue-500/5 border border-[#262a40] text-gray-500 text-xs';
+        state.innerHTML =
+            'Risk score calculated from currently available real weather factors. Missing API factors are excluded.';
+    }
+
+    scoreEl.textContent = String(score);
+    scoreEl.style.color = category.color;
+
+    categoryEl.textContent = `${category.label} Risk`;
+    categoryEl.style.color = category.color;
+
+    progressEl.style.width = `${score}%`;
+    progressEl.style.backgroundColor = category.color;
+
+    if (iconEl) {
+        iconEl.style.backgroundColor = `${category.color}15`;
+        iconEl.innerHTML = `<i class="fa-solid ${category.icon} text-2xl" style="color:${category.color};"></i>`;
+    }
+
+    locationEl.innerHTML = `<i class="fa-solid fa-location-dot mr-1"></i>${escapeHtml(cityName)}`;
+
+    factorsEl.innerHTML = factors.map(factor => {
+        const severity = weatherRiskSeverity(factor.score);
+
+        return `
+            <div class="bg-[#1b1f30] border border-[#262a40] rounded-xl p-3">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="text-xs text-gray-400">${escapeHtml(factor.name)}</p>
+                        <p class="text-sm font-semibold text-white mt-1 break-words">${escapeHtml(factor.value)}</p>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <p class="text-sm font-bold" style="color:${category.color};">${factor.score}/100</p>
+                        <p class="text-[10px] text-gray-500">${severity}</p>
+                    </div>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-2 leading-relaxed">${escapeHtml(factor.explanation)}</p>
+            </div>
+        `;
+    }).join('');
+
+    explanationEl.innerHTML = weatherRiskExplanation(factors);
+
+    const recommendations = weatherRiskRecommendations(factors);
+    recommendationsEl.innerHTML = recommendations
+        .map(item => `
+            <div class="flex items-start gap-2 mb-2 last:mb-0">
+                <i class="fa-solid fa-check text-blue-400 mt-0.5"></i>
+                <span>${escapeHtml(item)}</span>
+            </div>
+        `)
+        .join('');
+}
+
+async function loadWeatherRiskScore(city) {
+    const state = document.getElementById('weather-risk-state');
+    const results = document.getElementById('weather-risk-results');
+    const select = document.getElementById('weather-risk-city');
+
+    if (!city) return;
+
+    const requestId = ++weatherRiskRequestId;
+
+    if (state) {
+        state.className =
+            'p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-400 text-sm';
+        state.innerHTML = `
+            <i class="fa-solid fa-spinner fa-spin text-blue-400 mr-2"></i>
+            Loading real weather data for ${escapeHtml(city)}...
+        `;
+    }
+
+    if (results) {
+        results.classList.add('hidden');
+    }
+
+    try {
+        let data = liveDashboardCache[city];
+
+        if (!data) {
+            const response = await fetch(
+                `/api/weather?city=${encodeURIComponent(city)}`,
+                {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }
+            );
+
+            const contentType = response.headers.get('content-type') || '';
+            const json = contentType.includes('application/json')
+                ? await response.json()
+                : {};
+
+            if (!response.ok) {
+                throw new Error(
+                    json.error || json.message || `Weather data unavailable for ${city}.`
+                );
+            }
+
+            data = json;
+
+            const current = data?.current || data;
+            if (current?.name) {
+                liveDashboardCache[current.name] = data;
+            }
+        }
+
+        if (requestId !== weatherRiskRequestId || city !== weatherRiskSelectedCity) {
+            return;
+        }
+
+        const current = data?.current || data || {};
+        const aqiKey = String(current?.name || city).toLowerCase();
+        const aqiData = weatherRiskAqiCache[aqiKey] || null;
+
+        renderWeatherRiskScore(data, aqiData);
+
+    } catch (error) {
+        if (requestId !== weatherRiskRequestId) {
+            return;
+        }
+
+        if (results) {
+            results.classList.add('hidden');
+        }
+
+        if (state) {
+            state.className =
+                'p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm';
+            state.innerHTML = `
+                <i class="fa-solid fa-circle-exclamation mr-2"></i>
+                ${escapeHtml(error?.message || `Unable to load weather data for ${city}.`)}
+            `;
+        }
+
+        if (select) {
+            select.focus();
+        }
+    }
+}
+
+function refreshWeatherRiskFromDashboard(data, explicitAqiData = null) {
+    if (!weatherRiskSelectedCity) return;
+
+    const current = data?.current || data || {};
+    const currentName = String(current?.name || '').trim().toLowerCase();
+    const selectedName = String(weatherRiskSelectedCity || '').trim().toLowerCase();
+
+    if (!currentName || currentName !== selectedName) {
+        return;
+    }
+
+    const aqiData =
+        explicitAqiData ||
+        weatherRiskAqiCache[currentName] ||
+        null;
+
+    renderWeatherRiskScore(data, aqiData);
+}
+

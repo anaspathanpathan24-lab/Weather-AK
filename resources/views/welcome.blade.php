@@ -211,6 +211,89 @@
 
 </div>
 
+                <!-- Weather Risk Score -->
+                <div id="weather-risk-score-section" class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl w-full mb-6">
+                    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6">
+                        <div>
+                            <h3 class="text-gray-400 font-semibold text-sm uppercase tracking-wider">
+                                <i class="fa-solid fa-shield-heart text-blue-400 mr-2"></i> Weather Risk Score
+                            </h3>
+                            <p class="text-xs text-gray-500 mt-2">
+                                Real-time weather risk assessment using available data for the selected Gujarat location.
+                            </p>
+                        </div>
+
+                        <div class="w-full lg:w-80">
+                            <label for="weather-risk-city" class="block text-xs text-gray-400 mb-2">
+                                Select City / District
+                            </label>
+                            <select
+                                id="weather-risk-city"
+                                autocomplete="off"
+                                class="w-full bg-[#131521] text-white border border-[#262a40] px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="" selected disabled>Select Gujarat City / District</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="weather-risk-state" class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-500 text-sm">
+                        Select a Gujarat city/district to view the Weather Risk Score.
+                    </div>
+
+                    <div id="weather-risk-results" class="hidden mt-5 space-y-5">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                            <div id="weather-risk-overall-card" class="bg-[#131521] border border-[#262a40] rounded-2xl p-5 lg:col-span-1">
+                                <div class="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p class="text-xs text-gray-500 uppercase tracking-wider">Overall Score</p>
+                                        <div class="flex items-end gap-2 mt-2">
+                                            <span id="weather-risk-score" class="text-5xl font-extrabold text-white">--</span>
+                                            <span class="text-sm text-gray-500 mb-2">/100</span>
+                                        </div>
+                                        <p id="weather-risk-category" class="text-sm font-semibold mt-2 text-blue-400">--</p>
+                                    </div>
+                                    <div id="weather-risk-icon" class="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-shield-heart text-blue-400 text-2xl"></i>
+                                    </div>
+                                </div>
+
+                                <div class="mt-5 h-2 rounded-full bg-[#262a40] overflow-hidden">
+                                    <div id="weather-risk-progress" class="h-full rounded-full bg-blue-500 transition-all duration-500" style="width:0%"></div>
+                                </div>
+
+                                <p id="weather-risk-location" class="text-xs text-gray-500 mt-3">--</p>
+                            </div>
+
+                            <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5 lg:col-span-2">
+                                <div class="flex items-center justify-between gap-3 mb-4">
+                                    <div>
+                                        <h4 class="text-white font-semibold">Risk Factors</h4>
+                                        <p class="text-xs text-gray-500 mt-1">Only factors supported by real available data are shown.</p>
+                                    </div>
+                                </div>
+                                <div id="weather-risk-factors" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+                                <h4 class="text-white font-semibold mb-3">
+                                    <i class="fa-solid fa-circle-question text-blue-400 mr-2"></i> Why this score?
+                                </h4>
+                                <div id="weather-risk-explanation" class="text-sm text-gray-400 leading-relaxed"></div>
+                            </div>
+
+                            <div class="bg-[#131521] border border-[#262a40] rounded-2xl p-5">
+                                <h4 class="text-white font-semibold mb-3">
+                                    <i class="fa-solid fa-lightbulb text-blue-400 mr-2"></i> Recommendations
+                                </h4>
+                                <div id="weather-risk-recommendations" class="text-sm text-gray-400 leading-relaxed"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Extended Metrics Grid -->
                 <div id="extended-features" class="flex-1 flex flex-col gap-6 hidden">
                     
