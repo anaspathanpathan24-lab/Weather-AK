@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initInteractiveMap();
     initWeatherAnalytics();
     initDistrictComparison();
+    initFarmerAdvisory();
     fetchWeatherData('/api/weather?city=Mahesana');
 });
 
@@ -62,9 +63,9 @@ if (
     tabName !== 'ai' &&
     tabName !== 'travel' &&
     tabName !== 'weather-analytics' &&
-    tabName !== 'district-comparison'
+    tabName !== 'district-comparison' &&
+    tabName !== 'farmer'
 ) {
-
         document
             .getElementById('link-dashboard')
             ?.classList.add(
@@ -3383,23 +3384,74 @@ function initFarmerAdvisory() {
         return;
     }
 
-    // Districts
-    citySelect.innerHTML = `
-        <option value="">Select District</option>
-    `;
+    // ==========================================
+    // Gujarat City / District Search Suggestions
+    // ==========================================
+    const cityOptions =
+        document.getElementById('farmer-city-options');
 
-    gujaratDistricts.forEach(district => {
+    if (cityOptions) {
 
-        const option =
-            document.createElement('option');
+        cityOptions.innerHTML = '';
 
-        option.value = district;
-        option.textContent = district;
+        const locations = [
+            ...new Set([
+                ...gujaratDistricts,
 
-        citySelect.appendChild(option);
-    });
+                // Major Gujarat cities / urban locations
+                'Ahmedabad',
+                'Surat',
+                'Vadodara',
+                'Rajkot',
+                'Bhavnagar',
+                'Jamnagar',
+                'Gandhinagar',
+                'Junagadh',
+                'Anand',
+                'Nadiad',
+                'Bharuch',
+                'Navsari',
+                'Vapi',
+                'Valsad',
+                'Morbi',
+                'Palanpur',
+                'Himmatnagar',
+                'Patan',
+                'Mehsana',
+                'Veraval',
+                'Porbandar',
+                'Amreli',
+                'Botad',
+                'Bhuj',
+                'Dahod',
+                'Godhra',
+                'Modasa',
+                'Kalol',
+                'Deesa',
+                'Dholka',
+                'Jetpur',
+                'Gondal',
+                'Surendranagar',
+                'Wankaner',
+                'Dwarka',
+                'Ghogha'
+            ])
+        ];
 
-    // Crops
+        locations.forEach(location => {
+
+            const option =
+                document.createElement('option');
+
+            option.value = location;
+
+            cityOptions.appendChild(option);
+        });
+    }
+
+    // ==========================================
+    // Crop List
+    // ==========================================
     cropSelect.innerHTML = `
         <option value="">Select Crop</option>
     `;
@@ -3415,41 +3467,48 @@ function initFarmerAdvisory() {
         cropSelect.appendChild(option);
     });
 
-    // Default current city
-    if (currentActiveCity) {
-        citySelect.value = currentActiveCity;
-    } else {
-        citySelect.value = 'Mahesana';
-    }
+    // ==========================================
+    // No Default Selection
+    // ==========================================
+    citySelect.value = '';
+    cropSelect.value = '';
 
-    cropSelect.value = 'Wheat';
-
+    // ==========================================
+    // City / District Change
+    // ==========================================
     citySelect.addEventListener(
         'change',
         async () => {
 
             const city =
-                citySelect.value;
+                citySelect.value.trim();
 
-            if (!city) return;
+            if (!city) {
+                return;
+            }
 
             const cached =
                 liveDashboardCache[city];
 
+            // Use cached weather data if available
             if (cached) {
+
                 renderFarmerAdvisory(
                     cached,
                     cropSelect.value
                 );
+
                 return;
             }
 
+            // Loading message
             const content =
                 document.getElementById(
                     'farmer-advisory-content'
                 );
 
             if (content) {
+
                 content.innerHTML = `
                     <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-400">
                         <i class="fa-solid fa-spinner fa-spin text-blue-400 mr-2"></i>
@@ -3458,38 +3517,81 @@ function initFarmerAdvisory() {
                 `;
             }
 
-            await fetchWeatherData(
-                `/api/weather?city=${encodeURIComponent(city)}`
-            );
+            try {
 
-            const latest =
-                liveDashboardCache[city];
-
-            if (latest) {
-                renderFarmerAdvisory(
-                    latest,
-                    cropSelect.value
+                // Fetch real weather data
+                await fetchWeatherData(
+                    `/api/weather?city=${encodeURIComponent(city)}`
                 );
+
+                const latest =
+                    liveDashboardCache[city];
+
+                if (latest) {
+
+                    renderFarmerAdvisory(
+                        latest,
+                        cropSelect.value
+                    );
+
+                } else {
+
+                    if (content) {
+
+                        content.innerHTML = `
+                            <div class="p-4 rounded-xl bg-[#131521] border border-red-500/20 text-red-300">
+                                <i class="fa-solid fa-circle-exclamation mr-2"></i>
+                                Weather data could not be loaded for
+                                <strong>${escapeHtml(city)}</strong>.
+                                Please check the city name and try again.
+                            </div>
+                        `;
+                    }
+                }
+
+            } catch (error) {
+
+                console.error(
+                    'Farmer advisory weather loading error:',
+                    error
+                );
+
+                if (content) {
+
+                    content.innerHTML = `
+                        <div class="p-4 rounded-xl bg-[#131521] border border-red-500/20 text-red-300">
+                            <i class="fa-solid fa-triangle-exclamation mr-2"></i>
+                            Unable to load weather data for
+                            <strong>${escapeHtml(city)}</strong>.
+                        </div>
+                    `;
+                }
             }
         }
     );
 
+    // ==========================================
+    // Crop Change
+    // ==========================================
     cropSelect.addEventListener(
         'change',
         () => {
 
             const city =
-                citySelect.value;
+                citySelect.value.trim();
 
             const crop =
-                cropSelect.value;
+                cropSelect.value.trim();
 
-            if (!city || !crop) return;
+            if (!city || !crop) {
+                return;
+            }
 
             const data =
                 liveDashboardCache[city];
 
             if (data) {
+
                 renderFarmerAdvisory(
                     data,
                     crop
@@ -3498,18 +3600,23 @@ function initFarmerAdvisory() {
         }
     );
 
-    // Initial advisory
-    const initialData =
-        liveDashboardCache[currentActiveCity];
-
-    if (initialData) {
-        renderFarmerAdvisory(
-            initialData,
-            'Wheat'
+    // ==========================================
+    // Initial Empty State
+    // ==========================================
+    const content =
+        document.getElementById(
+            'farmer-advisory-content'
         );
+
+    if (content) {
+
+        content.innerHTML = `
+            <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-500">
+                Select a district/city and crop to view weather-based guidance.
+            </div>
+        `;
     }
 }
-
 
 function renderFarmerAdvisory(
     data,

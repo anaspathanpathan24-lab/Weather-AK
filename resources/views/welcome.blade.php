@@ -316,74 +316,8 @@
                 </div>
 
             </div>
-        <!-- Farmer Weather Advisory -->
-<div
-    id="farmer-advisory-section"
-    class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl self-start"
->
-    <h3 class="text-gray-400 font-semibold mb-5 text-sm uppercase tracking-wider">
-        <i class="fa-solid fa-seedling text-green-400 mr-2"></i>
-        Farmer Weather Advisory
-    </h3>
 
-    <!-- Selectors -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
 
-        <!-- District -->
-        <div>
-            <label class="block text-[11px] text-gray-500 mb-1">
-                District / City
-            </label>
-
-            <select
-                id="farmer-city"
-                class="w-full bg-[#131521] text-white border border-[#262a40] px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-blue-500"
-            >
-                <option value="">Select District</option>
-            </select>
-        </div>
-
-        <!-- Crop -->
-        <div>
-            <label class="block text-[11px] text-gray-500 mb-1">
-                Crop
-            </label>
-
-            <select
-                id="farmer-crop"
-                class="w-full bg-[#131521] text-white border border-[#262a40] px-3 py-2.5 rounded-xl text-sm focus:outline-none focus:border-blue-500"
-            >
-                <option value="">Select Crop</option>
-            </select>
-        </div>
-
-    </div>
-
-    <!-- Advisory Status -->
-    <div
-        id="farmer-advisory-status"
-        class="hidden mb-4"
-    ></div>
-
-    <!-- Advisory Content -->
-    <div
-        id="farmer-advisory-content"
-        class="text-sm text-gray-300"
-    >
-        <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-500">
-            Select a district and crop to view weather-based guidance.
-        </div>
-    </div>
-
-    <!-- Disclaimer -->
-    <div class="mt-4 p-3 rounded-xl bg-[#131521] border border-[#262a40]">
-        <p class="text-[10px] text-gray-500 leading-relaxed">
-            <i class="fa-solid fa-circle-info text-blue-400 mr-1"></i>
-            Weather-based guidance only. This is not professionally verified
-            agricultural advice and should be used with local farming expertise.
-        </p>
-    </div>
-</div>
             <!-- Favorites & Explorer Section -->
             <div class="w-full max-w-7xl mx-auto flex flex-col gap-8 pb-10">
                 <div class="bg-[#1b1f30] p-6 rounded-3xl border border-[#262a40] shadow-xl w-full">
@@ -402,6 +336,92 @@
                 </div>
             </div>
         </div>
+
+        <!-- TAB: FARMER WEATHER ADVISORY -->
+        <div id="tab-farmer" class="tab-content hidden">
+            <div class="w-full max-w-7xl mx-auto">
+                <div
+                    id="farmer-advisory-section"
+                    class="bg-[#1b1f30] p-6 md:p-8 rounded-3xl border border-[#262a40] shadow-xl mb-8"
+                >
+
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold text-white">
+                            <i class="fa-solid fa-seedling text-green-400 mr-2"></i>
+                            Farmer Weather Advisory
+                        </h2>
+
+                        <p class="text-sm text-gray-400 mt-1">
+                            Weather-based guidance for Gujarat farmers using live weather and forecast data.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+
+                        <!-- District / City Search -->
+                        <div>
+                            <label
+                                for="farmer-city"
+                                class="block text-xs text-gray-400 mb-2"
+                            >
+                                District / City
+                            </label>
+
+                            <input
+                                type="text"
+                                id="farmer-city"
+                                list="farmer-city-options"
+                                autocomplete="off"
+                                placeholder="Search Gujarat city or district..."
+                                class="w-full bg-[#131521] text-white border border-[#262a40] px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                            >
+
+                            <datalist id="farmer-city-options"></datalist>
+                        </div>
+
+                        <!-- Crop -->
+                        <div>
+                            <label
+                                for="farmer-crop"
+                                class="block text-xs text-gray-400 mb-2"
+                            >
+                                Crop
+                            </label>
+
+                            <select
+                                id="farmer-crop"
+                                autocomplete="off"
+                                class="w-full bg-[#131521] text-white border border-[#262a40] px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="" selected disabled>Select Crop</option>
+                            </select>
+                        </div>
+
+                    </div>
+
+                    <div id="farmer-advisory-status" class="hidden mb-4"></div>
+
+                    <div
+                        id="farmer-advisory-content"
+                        class="text-sm text-gray-300"
+                    >
+                        <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-500">
+                            Select a district/city and crop to view weather-based guidance.
+                        </div>
+                    </div>
+
+                    <div class="mt-4 p-3 rounded-xl bg-[#131521] border border-[#262a40]">
+                        <p class="text-[10px] text-gray-500 leading-relaxed">
+                            <i class="fa-solid fa-circle-info text-blue-400 mr-1"></i>
+                            Weather-based guidance only. This is not professionally verified
+                            agricultural advice and should be used with local farming expertise.
+                        </p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
 
         <!-- TAB 2: MAP VIEW -->
         <div id="tab-map" class="tab-content hidden">
