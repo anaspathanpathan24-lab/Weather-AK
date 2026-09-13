@@ -1295,23 +1295,48 @@ function showHistoricalStatus(message, type = 'info', allowHtml = false) {
 
     status.classList.remove('hidden');
 }
+let aiConversationHistory = [];
+
+
 // ==========================================
-// AI METEOROLOGIST CHATBOT
+// AI WEATHER ASSISTANT
 // ==========================================
 
 async function sendAiMessage() {
-    const input = document.getElementById('ai-input');
+
+    const input =
+        document.getElementById(
+            'ai-input'
+        );
 
     if (!input) return;
 
-    const prompt = input.value.trim();
+    const prompt =
+        input.value.trim();
 
     if (!prompt) return;
 
     const chatContainer =
-        document.getElementById('chat-messages');
+        document.getElementById(
+            'chat-messages'
+        );
 
     if (!chatContainer) return;
+
+
+    // ------------------------------------------
+    // CURRENT WEATHER CONTEXT
+    // ------------------------------------------
+
+    const currentContext =
+        liveDashboardCache[
+            currentActiveCity
+        ] || {};
+
+
+    // ------------------------------------------
+    // ADD USER MESSAGE TO UI
+    // ------------------------------------------
 
     chatContainer.innerHTML += `
         <div class="flex items-start gap-3 justify-end">
@@ -1327,23 +1352,33 @@ async function sendAiMessage() {
         </div>
     `;
 
+
     input.value = '';
 
     chatContainer.scrollTop =
         chatContainer.scrollHeight;
 
+
+    // ------------------------------------------
+    // LOADING STATE
+    // ------------------------------------------
+
     const loadingId =
-        'ai-load-' + Date.now();
+        'ai-load-' +
+        Date.now();
 
     chatContainer.innerHTML += `
-        <div id="${loadingId}" class="flex items-start gap-3">
+        <div
+            id="${loadingId}"
+            class="flex items-start gap-3"
+        >
 
             <div class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center shrink-0 text-xs font-bold">
                 AI
             </div>
 
             <div class="bg-[#131521] border border-[#262a40] p-4 rounded-2xl text-sm text-gray-400 italic">
-                Consulting Gujarat climate models...
+                Analyzing current weather and forecast...
             </div>
 
         </div>
@@ -1352,54 +1387,117 @@ async function sendAiMessage() {
     chatContainer.scrollTop =
         chatContainer.scrollHeight;
 
+
     try {
+
         const csrfToken =
             document
-                .querySelector('meta[name="csrf-token"]')
-                ?.getAttribute('content') || '';
+                .querySelector(
+                    'meta[name="csrf-token"]'
+                )
+                ?.getAttribute('content') ||
+            '';
+
 
         if (!csrfToken) {
+
             throw new Error(
                 'CSRF token not found in page.'
             );
         }
 
-        const response = await fetch(
-            '/api/meteorologist',
-            {
-                method: 'POST',
 
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
+        // ------------------------------------------
+        // SEND REAL CHAT HISTORY
+        // ------------------------------------------
 
-                body: JSON.stringify({
-                    prompt: prompt,
-                    context:
-                        liveDashboardCache[currentActiveCity] || {}
-                })
-            }
-        );
+        const historyForServer =
+            aiConversationHistory
+                .slice(-12)
+                .map(
+                    message => ({
+                        role:
+                            message.role,
+
+                        content:
+                            message.content
+                    })
+                );
+
+
+        const response =
+            await fetch(
+                '/api/meteorologist',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json',
+
+                        'Accept':
+                            'application/json',
+
+                        'X-CSRF-TOKEN':
+                            csrfToken,
+
+                        'X-Requested-With':
+                            'XMLHttpRequest'
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            prompt:
+                                prompt,
+
+                            location:
+                                currentActiveCity ||
+                                currentContext?.current?.name ||
+                                '',
+
+                            context:
+                                currentContext,
+
+                            history:
+                                historyForServer
+                        })
+                }
+            );
+
 
         const contentType =
-            response.headers.get('content-type') || '';
+            response
+                .headers
+                .get(
+                    'content-type'
+                ) || '';
+
 
         const resJson =
-            contentType.includes('application/json')
+            contentType.includes(
+                'application/json'
+            )
                 ? await response.json()
                 : {};
 
+
+        // ------------------------------------------
+        // REMOVE LOADING STATE
+        // ------------------------------------------
+
         const loadingEl =
-            document.getElementById(loadingId);
+            document.getElementById(
+                loadingId
+            );
 
         if (loadingEl) {
             loadingEl.remove();
         }
 
+
         if (!response.ok) {
+
             throw new Error(
                 resJson.message ||
                 resJson.error ||
@@ -1407,9 +1505,55 @@ async function sendAiMessage() {
             );
         }
 
+
         const replyText =
-            resJson.reply ||
-            'I am currently unable to generate a response. Please try again later.';
+            typeof resJson.reply === 'string' &&
+            resJson.reply.trim()
+                ? resJson.reply.trim()
+                : 'Weather data is currently unavailable for this answer.';
+
+
+        // ------------------------------------------
+        // SAVE CONVERSATION HISTORY
+        // ------------------------------------------
+
+        aiConversationHistory.push({
+
+            role:
+                'user',
+
+            content:
+                prompt
+
+        });
+
+        aiConversationHistory.push({
+
+            role:
+                'assistant',
+
+            content:
+                replyText
+
+        });
+
+
+        // Keep only latest 20 messages
+        if (
+            aiConversationHistory.length >
+            20
+        ) {
+
+            aiConversationHistory =
+                aiConversationHistory.slice(
+                    -20
+                );
+        }
+
+
+        // ------------------------------------------
+        // AI RESPONSE
+        // ------------------------------------------
 
         chatContainer.innerHTML += `
             <div class="flex items-start gap-3">
@@ -1425,22 +1569,28 @@ async function sendAiMessage() {
             </div>
         `;
 
+
         chatContainer.scrollTop =
             chatContainer.scrollHeight;
+
 
     } catch (e) {
 
         const loadingEl =
-            document.getElementById(loadingId);
+            document.getElementById(
+                loadingId
+            );
 
         if (loadingEl) {
             loadingEl.remove();
         }
 
+
         console.error(
-            'Meteorologist AI error:',
+            'AI Weather Assistant error:',
             e
         );
+
 
         chatContainer.innerHTML += `
             <div class="flex items-start gap-3">
@@ -1449,12 +1599,16 @@ async function sendAiMessage() {
                     AI
                 </div>
 
-                <div class="bg-[#131521] border border-red-500/30 p-4 rounded-2xl text-sm text-red-400">
-                    Connection error. Please try again.
+                <div class="bg-[#131521] border border-red-500/30 p-4 rounded-2xl text-sm text-red-400 max-w-lg leading-relaxed">
+                    ${escapeHtml(
+                        e.message ||
+                        'Unable to connect to the AI Weather Assistant right now.'
+                    )}
                 </div>
 
             </div>
         `;
+
 
         chatContainer.scrollTop =
             chatContainer.scrollHeight;

@@ -1957,107 +1957,436 @@ class WeatherController extends Controller
 
 
     /**
-     * AI Meteorologist.
+     * AI Weather Assistant.
+     *
+     * Uses the location mentioned in the user's prompt when available.
+     * Otherwise it uses the currently selected dashboard location.
      */
-    public function askMeteorologist(
-        Request $request
-    ) {
+    public function askMeteorologist(Request $request)
+    {
+        $validated = $request->validate([
+            'prompt' => [
+                'required',
+                'string',
+                'max:2000',
+            ],
 
-        $prompt =
-            $request->prompt ??
-            '';
+            'context' => [
+                'nullable',
+                'array',
+            ],
 
-        $aiApiKey =
-            env('GROQ_API_KEY');
+            'history' => [
+                'nullable',
+                'array',
+                'max:20',
+            ],
 
-        $reply =
-            "Namaste! Based on current Gujarat climate data, conditions are pleasant around 28°C–32°C. Let me know if you need specific district details!";
+            'location' => [
+                'nullable',
+                'string',
+                'max:100',
+            ],
+        ]);
 
-        if ($aiApiKey) {
+        $prompt = trim($validated['prompt']);
+        $context = $validated['context'] ?? [];
+        $history = $validated['history'] ?? [];
 
-            try {
+        $selectedLocation = trim((string) (
+            $validated['location'] ?? data_get($context, 'current.name', '')
+        ));
 
-                $aiResponse =
-                    Http::timeout(10)
-                        ->withToken(
-                            $aiApiKey
-                        )
-                        ->post(
-                            "https://api.groq.com/openai/v1/chat/completions",
-                            [
-                                'model' =>
-                                    'openai/gpt-oss-120b',
+        /*
+         * IMPORTANT:
+         * If the user explicitly mentions another Gujarat location,
+         * fetch weather for THAT location instead of blindly using the
+         * currently selected dashboard city.
+         */
+        $requestedLocation =
+            $this->detectGujaratLocationFromPrompt($prompt);
 
-                                'messages' => [
+        if ($requestedLocation) {
+            $freshContext =
+                $this->fetchMeteorologistWeatherContext($requestedLocation);
 
-                                    [
-                                        'role' =>
-                                            'system',
-
-                                        'content' =>
-                                            'You are a professional Gujarat Weather Assistant. Answer concisely, supporting English, Gujarati and Hinglish.',
-                                    ],
-
-                                    [
-                                        'role' =>
-                                            'user',
-
-                                        'content' =>
-                                            $prompt,
-                                    ],
-                                ],
-                            ]
-                        );
-
-                if (
-                    $aiResponse->successful()
-                ) {
-
-                    $responseData =
-                        $aiResponse->json();
-
-                    $groqText =
-                        $responseData[
-                            'choices'
-                        ][0][
-                            'message'
-                        ][
-                            'content'
-                        ] ??
-                        null;
-
-                    if ($groqText) {
-
-                        $reply =
-                            $groqText;
-                    }
-
-                } else {
-
-                    Log::error(
-                        'Groq API call failed',
-                        [
-                            'status' =>
-                                $aiResponse->status(),
-
-                            'body' =>
-                                $aiResponse->body(),
-                        ]
-                    );
-                }
-
-            } catch (\Exception $e) {
-
-                Log::error(
-                    'Groq API exception: ' .
-                    $e->getMessage()
-                );
+            if ($freshContext !== null) {
+                $context = $freshContext;
+                $selectedLocation = $requestedLocation;
+            } else {
+                return response()->json([
+                    'reply' =>
+                        "I couldn't load current weather data for {$requestedLocation}. Please try again in a moment.",
+                    'location' => $requestedLocation,
+                ], 200);
             }
         }
 
-        return response()->json([
-            'reply' =>
-                $reply
-        ]);
+        $currentWeather = data_get($context, 'current');
+        $forecast = data_get($context, 'forecast');
+        $uv = data_get($context, 'uv');
+
+        $weatherAvailable =
+            is_array($currentWeather) &&
+            isset($currentWeather['main'], $currentWeather['weather']) &&
+            !empty($currentWeather['weather']);
+
+        if (!$weatherAvailable) {
+            return response()->json([
+                'reply' =>
+                    'Current weather data is unavailable for the selected location. Please load a valid Gujarat location and try again.',
+                'location' => $selectedLocation ?: null,
+            ], 200);
+        }
+
+        $aiApiKey = env('GROQ_API_KEY');
+
+        if (!$aiApiKey) {
+            Log::error('Groq API key is not configured.');
+
+            return response()->json([
+                'error' =>
+                    'AI Weather Assistant is unavailable because the AI API key is not configured.',
+            ], 503);
+        }
+
+        $weatherContext = [
+            'selected_location' =>
+                $selectedLocation ?: ($currentWeather['name'] ?? 'Unknown'),
+
+            'current_weather' => [
+                'city' => $currentWeather['name'] ?? null,
+                'temperature_c' => data_get($currentWeather, 'main.temp'),
+                'feels_like_c' => data_get($currentWeather, 'main.feels_like'),
+                'humidity_percent' => data_get($currentWeather, 'main.humidity'),
+                'pressure_hpa' => data_get($currentWeather, 'main.pressure'),
+                'wind_speed_kmh' => data_get($currentWeather, 'wind.speed'),
+                'wind_direction_deg' => data_get($currentWeather, 'wind.deg'),
+                'visibility_m' => data_get($currentWeather, 'visibility'),
+                'condition' => data_get($currentWeather, 'weather.0.description'),
+            ],
+
+            'forecast' => $this->prepareMeteorologistForecast($forecast),
+
+            'uv' => [
+                'available' => data_get($uv, 'available', false),
+                'value' => data_get($uv, 'value'),
+                'category' => data_get($uv, 'category'),
+                'peak_value' => data_get($uv, 'peak_value'),
+                'peak_time' => data_get($uv, 'peak_time'),
+            ],
+        ];
+
+        $conversationHistory = [];
+
+        foreach (array_slice($history, -12) as $message) {
+            if (!is_array($message)) {
+                continue;
+            }
+
+            $role = $message['role'] ?? null;
+            $content = trim((string) ($message['content'] ?? ''));
+
+            if (
+                !in_array($role, ['user', 'assistant'], true) ||
+                $content === ''
+            ) {
+                continue;
+            }
+
+            $conversationHistory[] = [
+                'role' => $role,
+                'content' => $content,
+            ];
+        }
+
+        $systemPrompt =
+            'You are the AI Weather Assistant for the Gujarat Weather Intelligence Platform.\n\n' .
+            'Answer the user dynamically using only the supplied real weather context.\n' .
+            'Always prioritize the location explicitly mentioned in the current user prompt.\n' .
+            'If no location is mentioned, use the selected location in the context.\n' .
+            'For rain questions, inspect forecast rain probability and forecast condition.\n' .
+            'For travel questions, consider rain, wind, visibility, temperature and severe weather when available.\n' .
+            'For outdoor timing questions, consider temperature, rain and UV when available.\n' .
+            'For farmer questions, provide cautious weather-based guidance only from the supplied data.\n' .
+            'Never invent weather values, locations, forecast periods or conditions.\n' .
+            'If the requested information is not available, clearly say that the data is unavailable.\n' .
+            'Keep answers concise and practical.\n' .
+            'Reply in the user\'s language style when practical: English, Gujarati or Hinglish.\n\n' .
+            'REAL WEATHER CONTEXT:\n' .
+            json_encode(
+                $weatherContext,
+                JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+
+        $messages = [
+            [
+                'role' => 'system',
+                'content' => $systemPrompt,
+            ],
+        ];
+
+        foreach ($conversationHistory as $message) {
+            $messages[] = $message;
+        }
+
+        $messages[] = [
+            'role' => 'user',
+            'content' => $prompt,
+        ];
+
+        try {
+            $aiResponse = Http::timeout(20)
+                ->withToken($aiApiKey)
+                ->post(
+                    'https://api.groq.com/openai/v1/chat/completions',
+                    [
+                        'model' => 'openai/gpt-oss-120b',
+                        'messages' => $messages,
+                        'temperature' => 0.3,
+                        'max_tokens' => 500,
+                    ]
+                );
+
+            if (!$aiResponse->successful()) {
+                Log::error(
+                    'Groq AI Weather request failed',
+                    [
+                        'status' => $aiResponse->status(),
+                        'body' => $aiResponse->body(),
+                    ]
+                );
+
+                return response()->json([
+                    'error' =>
+                        'AI Weather Assistant is temporarily unavailable. Please try again.',
+                ], 502);
+            }
+
+            $responseData = $aiResponse->json();
+            $reply = data_get($responseData, 'choices.0.message.content');
+
+            if (!is_string($reply) || trim($reply) === '') {
+                return response()->json([
+                    'error' =>
+                        'The AI Weather Assistant returned no usable answer.',
+                ], 502);
+            }
+
+            return response()->json([
+                'reply' => trim($reply),
+                'location' =>
+                    $selectedLocation ?: ($currentWeather['name'] ?? null),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error(
+                'Meteorologist AI exception',
+                [
+                    'message' => $e->getMessage(),
+                ]
+            );
+
+            return response()->json([
+                'error' =>
+                    'Unable to connect to the AI Weather Assistant right now.',
+            ], 502);
+        }
+    }
+
+
+    /**
+     * Detect a Gujarat location mentioned in the user's current prompt.
+     */
+    private function detectGujaratLocationFromPrompt(string $prompt): ?string
+    {
+        $locations = [
+            'Devbhumi Dwarka',
+            'Gir Somnath',
+            'Chhota Udepur',
+            'Bhavnagar',
+            'Gandhinagar',
+            'Ahmedabad',
+            'Amreli',
+            'Anand',
+            'Aravalli',
+            'Banaskantha',
+            'Bharuch',
+            'Botad',
+            'Dahod',
+            'Dang',
+            'Jamnagar',
+            'Junagadh',
+            'Kheda',
+            'Kutch',
+            'Mahisagar',
+            'Mahesana',
+            'Mehsana',
+            'Morbi',
+            'Narmada',
+            'Navsari',
+            'Panchmahal',
+            'Patan',
+            'Porbandar',
+            'Rajkot',
+            'Sabarkantha',
+            'Surat',
+            'Surendranagar',
+            'Tapi',
+            'Vadodara',
+            'Valsad',
+            'Bhuj',
+        ];
+
+        usort(
+            $locations,
+            static fn ($a, $b) => strlen($b) <=> strlen($a)
+        );
+
+        foreach ($locations as $location) {
+            if (preg_match('/(?<![A-Za-z])' . preg_quote($location, '/') . '(?![A-Za-z])/iu', $prompt)) {
+                return strcasecmp($location, 'Mehsana') === 0
+                    ? 'Mahesana'
+                    : $location;
+            }
+        }
+
+        /*
+         * Fallback for simple prompts such as:
+         * "weather in Dholka"
+         * "forecast for Palanpur"
+         * "temperature at Modasa"
+         *
+         * The candidate is then validated through Gujarat geocoding.
+         */
+        if (preg_match(
+            '/(?:\bin\b|\bfor\b|\bat\b|\babout\b)\s+([A-Za-z][A-Za-z\s-]{1,45}?)(?=\s+(?:weather|forecast|today|tomorrow|now|temperature|rain|rainfall|wind|humidity|outside|travel)\b|[?.!,]|$)/iu',
+            $prompt,
+            $matches
+        )) {
+            $candidate = trim($matches[1]);
+            $candidate = preg_replace('/\s+$/', '', $candidate);
+
+            if ($candidate !== '') {
+                $location = $this->resolveGujaratLocation(
+                    $candidate,
+                    'meteorologist'
+                );
+
+                if ($location && isset($location['name'])) {
+                    return $location['name'];
+                }
+            }
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Fetch fresh OpenWeather data for the location mentioned by the user.
+     */
+    private function fetchMeteorologistWeatherContext(string $city): ?array
+    {
+        $apiKey = env('OPENWEATHER_API_KEY');
+
+        if (!$apiKey) {
+            Log::error('OpenWeather API key is not configured.');
+            return null;
+        }
+
+        try {
+            $currentResponse = Http::timeout(10)->get(
+                'https://api.openweathermap.org/data/2.5/weather',
+                [
+                    'q' => $city . ', Gujarat, IN',
+                    'units' => 'metric',
+                    'appid' => $apiKey,
+                ]
+            );
+
+            if (!$currentResponse->successful()) {
+                return null;
+            }
+
+            $current = $currentResponse->json();
+            $lat = data_get($current, 'coord.lat');
+            $lon = data_get($current, 'coord.lon');
+
+            if (!is_numeric($lat) || !is_numeric($lon)) {
+                return null;
+            }
+
+            $forecastResponse = Http::timeout(10)->get(
+                'https://api.openweathermap.org/data/2.5/forecast',
+                [
+                    'lat' => $lat,
+                    'lon' => $lon,
+                    'units' => 'metric',
+                    'appid' => $apiKey,
+                ]
+            );
+
+            return [
+                'current' => $current,
+                'forecast' => $forecastResponse->successful()
+                    ? $forecastResponse->json()
+                    : null,
+                'uv' => $this->getUvIndex((float) $lat, (float) $lon),
+            ];
+        } catch (\Throwable $e) {
+            Log::warning(
+                'AI Weather location fetch failed',
+                [
+                    'city' => $city,
+                    'message' => $e->getMessage(),
+                ]
+            );
+
+            return null;
+        }
+    }
+
+
+    /**
+     * Prepare only useful forecast information for the AI.
+     */
+    private function prepareMeteorologistForecast($forecast): array
+    {
+        if (
+            is_array($forecast) &&
+            isset($forecast['list']) &&
+            is_array($forecast['list'])
+        ) {
+            $forecast = $forecast['list'];
+        }
+
+        if (!is_array($forecast)) {
+            return [];
+        }
+
+        $prepared = [];
+
+        foreach (array_slice($forecast, 0, 16) as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $prepared[] = [
+                'time' => $item['dt_txt'] ?? null,
+                'temperature_c' => data_get($item, 'main.temp'),
+                'feels_like_c' => data_get($item, 'main.feels_like'),
+                'humidity_percent' => data_get($item, 'main.humidity'),
+                'rain_probability' => isset($item['pop'])
+                    ? round((float) $item['pop'] * 100)
+                    : null,
+                'rainfall_3h_mm' => data_get($item, 'rain.3h'),
+                'wind_speed_kmh' => data_get($item, 'wind.speed'),
+                'wind_direction_deg' => data_get($item, 'wind.deg'),
+                'visibility_m' => $item['visibility'] ?? null,
+                'condition' => data_get($item, 'weather.0.description'),
+            ];
+        }
+
+        return $prepared;
     }
 }
