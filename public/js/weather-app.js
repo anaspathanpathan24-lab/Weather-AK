@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initDistrictComparison();
     initFarmerAdvisory();
     initWeatherRiskScore();
-    fetchWeatherData('/api/weather?city=Mahesana');
+
 });
 
 function toggleMobileSidebar(forceClose) {
@@ -103,26 +103,141 @@ async function fetchWeatherData(queryUrl) {
     showAlert('');
 
     try {
-        const response = await fetch(queryUrl);
-        const contentType = response.headers.get("content-type");
+        const response = await fetch(queryUrl, {
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
 
-        if (contentType && contentType.indexOf("application/json") !== -1) {
-            const data = await response.json();
+        const contentType =
+            response.headers.get('content-type') || '';
 
-            if (!response.ok) {
-                showAlert(data.error || "Location not found!");
-                return;
+        let data = null;
+
+        if (contentType.includes('application/json')) {
+            data = await response.json();
+        }
+
+        if (!response.ok) {
+            let message =
+                data?.error ||
+                data?.message ||
+                `Weather request failed (${response.status}).`;
+
+            if (response.status === 400) {
+                message =
+                    data?.error ||
+                    'Please enter a valid Gujarat city or district.';
+            } else if (response.status === 404) {
+                message =
+                    data?.error ||
+                    'No Gujarat location was found. Please check the spelling.';
+            } else if (response.status === 429) {
+                message =
+                    data?.error ||
+                    'Weather service rate limit reached. Please try again shortly.';
+            } else if (response.status === 502) {
+                message =
+                    data?.error ||
+                    'Weather service is temporarily unavailable. Please try again.';
+            } else if (response.status === 503) {
+                message =
+                    data?.error ||
+                    'Weather service is not configured correctly.';
             }
 
-            updateDashboardUI(data);
-        } else {
-            showAlert("Server error. Please check your backend.");
+            showAlert(message);
+            return null;
         }
+
+        if (!contentType.includes('application/json') || !data) {
+            showAlert('Server returned an invalid weather response.');
+            return null;
+        }
+
+        updateDashboardUI(data);
+        return data;
+
     } catch (error) {
-        console.error(error);
-        showAlert("Network error. Please try again.");
+        console.error('Weather request error:', error);
+
+        showAlert(
+            error?.message ||
+            'Network error. Please try again.'
+        );
+
+        return null;
     }
 }
+
+async function resolveGujaratLocationForApp(query) {
+    const value = String(query || '').trim();
+
+    if (!value) {
+        throw new Error(
+            'Please enter a Gujarat city or district name.'
+        );
+    }
+
+    const response = await fetch(
+        `/api/locations/search?q=${encodeURIComponent(value)}`,
+        {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }
+    );
+
+    const contentType =
+        response.headers.get('content-type') || '';
+
+    let data = null;
+
+    if (contentType.includes('application/json')) {
+        data = await response.json();
+    }
+
+    if (!response.ok) {
+
+        if (response.status === 429) {
+            throw new Error(
+                data?.error ||
+                'Location service rate limit reached. Please try again shortly.'
+            );
+        }
+
+        throw new Error(
+            data?.error ||
+            `Unable to resolve location (${response.status}).`
+        );
+    }
+
+    const location =
+        Array.isArray(data?.locations) &&
+        data.locations.length
+            ? data.locations[0]
+            : null;
+
+    if (
+        !location ||
+        !Number.isFinite(Number(location.latitude)) ||
+        !Number.isFinite(Number(location.longitude))
+    ) {
+        throw new Error(
+            `No usable Gujarat location was found for "${value}".`
+        );
+    }
+
+    return {
+        ...location,
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude)
+    };
+}
+
 
 function updateDashboardUI(data) {
     const current = data.current ? data.current : data;
@@ -2069,38 +2184,91 @@ async function renderFavorites() {
 
 document.getElementById('search-btn')?.addEventListener(
     'click',
-    () => {
+    async () => {
+
         const input =
             document.getElementById('city');
 
+        const button =
+            document.getElementById('search-btn');
+
         if (!input) return;
 
-        const city = input.value.trim();
+        const city =
+            input.value.trim();
 
         if (!city) {
-            showAlert('Please enter a city or district name.');
+            showAlert(
+                'Please enter a city or district name.'
+            );
+
+            input.focus();
+
             return;
+        }
+
+        if (button) {
+            button.disabled = true;
         }
 
         switchTab('dashboard');
 
-        fetchWeatherData(
-            `/api/weather?city=${encodeURIComponent(city)}`
+        showAlert(
+            'Finding location...',
+            false
         );
+
+        try {
+
+            const location =
+                await resolveGujaratLocationForApp(
+                    city
+                );
+
+            // Show canonical spelling
+            input.value =
+                location.name || city;
+
+            await fetchWeatherData(
+                `/api/weather?lat=${encodeURIComponent(location.latitude)}&lon=${encodeURIComponent(location.longitude)}`
+            );
+
+        } catch (error) {
+
+            console.error(
+                'City search error:',
+                error
+            );
+
+            showAlert(
+                error?.message ||
+                'Unable to find this Gujarat location.'
+            );
+
+        } finally {
+
+            if (button) {
+                button.disabled = false;
+            }
+        }
     }
 );
+
 
 document.getElementById('city')?.addEventListener(
     'keydown',
     event => {
+
         if (event.key === 'Enter') {
+
+            event.preventDefault();
+
             document
                 .getElementById('search-btn')
                 ?.click();
         }
     }
 );
-
 
 // ==========================================
 // GPS / CURRENT LOCATION
@@ -3656,76 +3824,28 @@ function initFarmerAdvisory() {
         return;
     }
 
-    // ==========================================
-    // Gujarat City / District Search Suggestions
-    // ==========================================
-    const cityOptions =
-        document.getElementById('farmer-city-options');
+    citySelect.innerHTML = `
+        <option value="" selected>
+            Select District
+        </option>
+    `;
 
-    if (cityOptions) {
+    gujaratDistricts.forEach(district => {
 
-        cityOptions.innerHTML = '';
+        const option =
+            document.createElement('option');
 
-        const locations = [
-            ...new Set([
-                ...gujaratDistricts,
+        option.value = district;
+        option.textContent = district;
 
-                // Major Gujarat cities / urban locations
-                'Ahmedabad',
-                'Surat',
-                'Vadodara',
-                'Rajkot',
-                'Bhavnagar',
-                'Jamnagar',
-                'Gandhinagar',
-                'Junagadh',
-                'Anand',
-                'Nadiad',
-                'Bharuch',
-                'Navsari',
-                'Vapi',
-                'Valsad',
-                'Morbi',
-                'Palanpur',
-                'Himmatnagar',
-                'Patan',
-                'Mehsana',
-                'Veraval',
-                'Porbandar',
-                'Amreli',
-                'Botad',
-                'Bhuj',
-                'Dahod',
-                'Godhra',
-                'Modasa',
-                'Kalol',
-                'Deesa',
-                'Dholka',
-                'Jetpur',
-                'Gondal',
-                'Surendranagar',
-                'Wankaner',
-                'Dwarka',
-                'Ghogha'
-            ])
-        ];
+        citySelect.appendChild(option);
+    });
 
-        locations.forEach(location => {
 
-            const option =
-                document.createElement('option');
-
-            option.value = location;
-
-            cityOptions.appendChild(option);
-        });
-    }
-
-    // ==========================================
-    // Crop List
-    // ==========================================
     cropSelect.innerHTML = `
-        <option value="">Select Crop</option>
+        <option value="" selected>
+            Select Crop
+        </option>
     `;
 
     farmerCrops.forEach(crop => {
@@ -3739,15 +3859,12 @@ function initFarmerAdvisory() {
         cropSelect.appendChild(option);
     });
 
-    // ==========================================
-    // No Default Selection
-    // ==========================================
+
+    // No automatic city/crop selection
     citySelect.value = '';
     cropSelect.value = '';
 
-    // ==========================================
-    // City / District Change
-    // ==========================================
+
     citySelect.addEventListener(
         'change',
         async () => {
@@ -3755,25 +3872,8 @@ function initFarmerAdvisory() {
             const city =
                 citySelect.value.trim();
 
-            if (!city) {
-                return;
-            }
+            if (!city) return;
 
-            const cached =
-                liveDashboardCache[city];
-
-            // Use cached weather data if available
-            if (cached) {
-
-                renderFarmerAdvisory(
-                    cached,
-                    cropSelect.value
-                );
-
-                return;
-            }
-
-            // Loading message
             const content =
                 document.getElementById(
                     'farmer-advisory-content'
@@ -3789,62 +3889,56 @@ function initFarmerAdvisory() {
                 `;
             }
 
-            try {
 
-                // Fetch real weather data
+            const cached =
+                liveDashboardCache[city] ||
+                liveDashboardCache[currentActiveCity];
+
+            if (cached) {
+
+                if (cropSelect.value) {
+
+                    renderFarmerAdvisory(
+                        cached,
+                        cropSelect.value
+                    );
+                }
+
+                return;
+            }
+
+
+            const latest =
                 await fetchWeatherData(
                     `/api/weather?city=${encodeURIComponent(city)}`
                 );
 
-                const latest =
-                    liveDashboardCache[city];
 
-                if (latest) {
+            if (
+                latest &&
+                cropSelect.value
+            ) {
 
-                    renderFarmerAdvisory(
-                        latest,
-                        cropSelect.value
-                    );
-
-                } else {
-
-                    if (content) {
-
-                        content.innerHTML = `
-                            <div class="p-4 rounded-xl bg-[#131521] border border-red-500/20 text-red-300">
-                                <i class="fa-solid fa-circle-exclamation mr-2"></i>
-                                Weather data could not be loaded for
-                                <strong>${escapeHtml(city)}</strong>.
-                                Please check the city name and try again.
-                            </div>
-                        `;
-                    }
-                }
-
-            } catch (error) {
-
-                console.error(
-                    'Farmer advisory weather loading error:',
-                    error
+                renderFarmerAdvisory(
+                    latest,
+                    cropSelect.value
                 );
 
-                if (content) {
+            } else if (
+                content &&
+                !cropSelect.value
+            ) {
 
-                    content.innerHTML = `
-                        <div class="p-4 rounded-xl bg-[#131521] border border-red-500/20 text-red-300">
-                            <i class="fa-solid fa-triangle-exclamation mr-2"></i>
-                            Unable to load weather data for
-                            <strong>${escapeHtml(city)}</strong>.
-                        </div>
-                    `;
-                }
+                content.innerHTML = `
+                    <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-400">
+                        Weather loaded. Please select a crop to generate the advisory.
+                    </div>
+                `;
             }
         }
     );
 
-    // ==========================================
-    // Crop Change
-    // ==========================================
+
     cropSelect.addEventListener(
         'change',
         () => {
@@ -3860,7 +3954,8 @@ function initFarmerAdvisory() {
             }
 
             const data =
-                liveDashboardCache[city];
+                liveDashboardCache[city] ||
+                liveDashboardCache[currentActiveCity];
 
             if (data) {
 
@@ -3872,22 +3967,7 @@ function initFarmerAdvisory() {
         }
     );
 
-    // ==========================================
-    // Initial Empty State
-    // ==========================================
-    const content =
-        document.getElementById(
-            'farmer-advisory-content'
-        );
-
-    if (content) {
-
-        content.innerHTML = `
-            <div class="p-4 rounded-xl bg-[#131521] border border-[#262a40] text-gray-500">
-                Select a district/city and crop to view weather-based guidance.
-            </div>
-        `;
-    }
+    // No initial advisory render
 }
 
 function renderFarmerAdvisory(
@@ -4339,61 +4419,20 @@ function renderFarmerAdvisory(
 // ==========================================
 // TRAVEL WEATHER
 // ==========================================
-
 async function geocodeTravelLocation(city) {
 
-    const response = await fetch(
-        `/api/weather?city=${encodeURIComponent(city)}`
-    );
-
-    const contentType =
-        response.headers.get('content-type') || '';
-
-    if (!contentType.includes('application/json')) {
-        throw new Error(
-            `Unable to find location "${city}".`
-        );
-    }
-
-    const data = await response.json();
-
-    if (
-        !response.ok ||
-        !data
-    ) {
-        throw new Error(
-            data?.error ||
-            `Location "${city}" could not be found.`
-        );
-    }
-
-    const current =
-        data.current
-            ? data.current
-            : data;
-
-    const lat =
-        Number(current?.coord?.lat);
-
-    const lon =
-        Number(current?.coord?.lon);
-
-    if (
-        !Number.isFinite(lat) ||
-        !Number.isFinite(lon)
-    ) {
-        throw new Error(
-            `Coordinates unavailable for "${city}".`
-        );
-    }
+    const location =
+        await resolveGujaratLocationForApp(city);
 
     return {
         name:
-            current.name ||
-            city,
-        lat,
-        lon,
-        data
+            location.name || city,
+
+        lat:
+            Number(location.latitude),
+
+        lon:
+            Number(location.longitude)
     };
 }
 
@@ -7359,7 +7398,8 @@ function initDistrictComparison() {
 
     select.innerHTML = '';
 
-    districtComparisonLocations.forEach(
+
+    [...new Set(gujaratDistricts)].forEach(
         location => {
 
             const option =
@@ -7371,8 +7411,10 @@ function initDistrictComparison() {
             select.appendChild(option);
         }
     );
-}
 
+
+    select.selectedIndex = -1;
+}
 
 function setDistrictComparisonStatus(
     message,

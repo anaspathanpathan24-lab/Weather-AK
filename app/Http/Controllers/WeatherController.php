@@ -14,70 +14,269 @@ class WeatherController extends Controller
     {
         $apiKey = env('OPENWEATHER_API_KEY');
 
+        if (!$apiKey) {
+            return response()->json([
+                'error' => 'OpenWeather API key is not configured.'
+            ], 503);
+        }
+
         try {
-            if ($request->has('lat') && $request->has('lon')) {
-                $lat = $request->lat;
-                $lon = $request->lon;
+            $hasCoordinates = $request->has('lat') || $request->has('lon');
 
-                $currentResponse = Http::get(
-                    "https://api.openweathermap.org/data/2.5/weather?lat={$lat}&lon={$lon}&units=metric&appid={$apiKey}"
-                );
+            if ($hasCoordinates) {
+                if (!$request->has('lat') || !$request->has('lon')) {
+                    return response()->json([
+                        'error' => 'Both latitude and longitude are required.'
+                    ], 400);
+                }
+
+                if (
+                    !is_numeric($request->lat) ||
+                    !is_numeric($request->lon) ||
+                    (float) $request->lat < -90 ||
+                    (float) $request->lat > 90 ||
+                    (float) $request->lon < -180 ||
+                    (float) $request->lon > 180
+                ) {
+                    return response()->json([
+                        'error' => 'Invalid latitude or longitude.'
+                    ], 400);
+                }
+
+                $lat = (float) $request->lat;
+                $lon = (float) $request->lon;
+                $location = null;
             } else {
-                $city = $request->city ?? 'Mahesana';
+                $city = trim((string) $request->input('city', ''));
 
-                $currentResponse = Http::get(
-                    "https://api.openweathermap.org/data/2.5/weather?q=" .
-                    urlencode($city) .
-                    "&units=metric&appid={$apiKey}"
+                if ($city === '') {
+                    return response()->json([
+                        'error' => 'Please enter a Gujarat city or district name.'
+                    ], 400);
+                }
+
+                $location = $this->resolveGujaratLocation(
+                    $city,
+                    'weather'
                 );
+
+                if (
+                    !$location ||
+                    !is_numeric($location['latitude'] ?? null) ||
+                    !is_numeric($location['longitude'] ?? null)
+                ) {
+                    return response()->json([
+                        'error' => "Could not find a Gujarat location for '{$city}'. Please check the spelling and try again."
+                    ], 404);
+                }
+
+                $lat = (float) $location['latitude'];
+                $lon = (float) $location['longitude'];
             }
 
-            if (!$currentResponse->successful()) {
+            $cacheKey = sprintf(
+                'weather_current_forecast:%s:%s',
+                number_format($lat, 4, '.', ''),
+                number_format($lon, 4, '.', '')
+            );
+
+            $weatherData = Cache::remember(
+                $cacheKey,
+                now()->addMinutes(1),
+                function () use ($apiKey, $lat, $lon) {
+                    $currentResponse = Http::timeout(10)->get(
+                        'https://api.openweathermap.org/data/2.5/weather',
+                        [
+                            'lat' => $lat,
+                            'lon' => $lon,
+                            'units' => 'metric',
+                            'appid' => $apiKey,
+                        ]
+                    );
+
+                    if (!$currentResponse->successful()) {
+                        $status = $currentResponse->status();
+
+                        Log::error(
+                            'OpenWeather current weather request failed',
+                            [
+                                'status' => $status,
+                                'body' => $currentResponse->body(),
+                                'lat' => $lat,
+                                'lon' => $lon,
+                            ]
+                        );
+
+                        if ($status === 401) {
+                            throw new \RuntimeException('OPENWEATHER_AUTH_ERROR');
+                        }
+
+                        if ($status === 429) {
+                            throw new \RuntimeException('OPENWEATHER_RATE_LIMIT');
+                        }
+
+                        throw new \RuntimeException('OPENWEATHER_PROVIDER_ERROR');
+                    }
+
+                    $currentData = $currentResponse->json();
+
+                    if (
+                        !is_array($currentData) ||
+                        !isset($currentData['coord']['lat'], $currentData['coord']['lon']) ||
+                        !isset($currentData['main'], $currentData['weather'][0])
+                    ) {
+                        throw new \RuntimeException('OPENWEATHER_INVALID_RESPONSE');
+                    }
+
+                    $resolvedLat = (float) $currentData['coord']['lat'];
+                    $resolvedLon = (float) $currentData['coord']['lon'];
+
+                    $forecastResponse = Http::timeout(10)->get(
+                        'https://api.openweathermap.org/data/2.5/forecast',
+                        [
+                            'lat' => $resolvedLat,
+                            'lon' => $resolvedLon,
+                            'units' => 'metric',
+                            'appid' => $apiKey,
+                        ]
+                    );
+
+                    if (!$forecastResponse->successful()) {
+                        Log::warning(
+                            'OpenWeather forecast request failed',
+                            [
+                                'status' => $forecastResponse->status(),
+                                'body' => $forecastResponse->body(),
+                                'lat' => $resolvedLat,
+                                'lon' => $resolvedLon,
+                            ]
+                        );
+                    }
+
+                    return [
+                        'current' => $currentData,
+                        'forecast' => $forecastResponse->successful()
+                            ? $forecastResponse->json()
+                            : null,
+                        'uv' => $this->getUvIndex(
+                            $resolvedLat,
+                            $resolvedLon
+                        ),
+                    ];
+                }
+            );
+
+            if (!is_array($weatherData) || !isset($weatherData['current'])) {
                 return response()->json([
-                    'error' => 'Location not found.'
+                    'error' => 'Weather data is currently unavailable.'
+                ], 502);
+            }
+
+            if ($location && !empty($location['name'])) {
+                $weatherData['current']['name'] = $location['name'];
+            }
+
+            $weatherData['location'] = $location;
+
+            return response()->json($weatherData);
+
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'OPENWEATHER_AUTH_ERROR') {
+                return response()->json([
+                    'error' => 'Weather service authentication failed. Please check the OpenWeather API key.'
+                ], 503);
+            }
+
+            if ($e->getMessage() === 'OPENWEATHER_RATE_LIMIT') {
+                return response()->json([
+                    'error' => 'Weather service rate limit reached. Please try again shortly.'
+                ], 429);
+            }
+
+            if ($e->getMessage() === 'OPENWEATHER_INVALID_RESPONSE') {
+                return response()->json([
+                    'error' => 'Weather service returned an invalid response.'
+                ], 502);
+            }
+
+            Log::error(
+                'Weather provider exception',
+                [
+                    'message' => $e->getMessage(),
+                    'city' => $request->input('city'),
+                    'lat' => $request->input('lat'),
+                    'lon' => $request->input('lon'),
+                ]
+            );
+
+            return response()->json([
+                'error' => 'Weather service is temporarily unavailable.'
+            ], 502);
+
+        } catch (\Throwable $e) {
+            Log::error(
+                'Weather API exception',
+                [
+                    'message' => $e->getMessage(),
+                    'city' => $request->input('city'),
+                    'lat' => $request->input('lat'),
+                    'lon' => $request->input('lon'),
+                ]
+            );
+
+            return response()->json([
+                'error' => 'Server error occurred while loading weather data.'
+            ], 500);
+        }
+    }
+
+
+    /**
+     * Central Gujarat location search endpoint.
+     */
+    public function searchLocations(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => [
+                'required',
+                'string',
+                'min:2',
+                'max:100'
+            ],
+        ]);
+
+        $query = trim($validated['q']);
+
+        try {
+            $location = $this->resolveGujaratLocation(
+                $query,
+                'locations'
+            );
+
+            if (!$location) {
+                return response()->json([
+                    'query' => $query,
+                    'locations' => [],
+                    'error' => "No Gujarat location found for '{$query}'. Please check the spelling."
                 ], 404);
             }
 
-            $currentData = $currentResponse->json();
-
-            $lat =
-                $currentData['coord']['lat'] ??
-                23.5880;
-
-            $lon =
-                $currentData['coord']['lon'] ??
-                72.3693;
-
-            $forecastResponse = Http::get(
-                "https://api.openweathermap.org/data/2.5/forecast?lat={$lat}&lon={$lon}&units=metric&appid={$apiKey}"
-            );
-
             return response()->json([
-                'current' => $currentData,
-
-                'forecast' =>
-                    $forecastResponse->successful()
-                        ? $forecastResponse->json()
-                        : null,
-
-                'uv' =>
-                    $this->getUvIndex(
-                        $lat,
-                        $lon
-                    ),
+                'query' => $query,
+                'locations' => [$location],
             ]);
-
-        } catch (\Exception $e) {
-
+        } catch (\Throwable $e) {
             Log::error(
-                'Weather API exception: ' .
-                $e->getMessage()
+                'Location search exception',
+                [
+                    'query' => $query,
+                    'message' => $e->getMessage(),
+                ]
             );
 
             return response()->json([
-                'error' =>
-                    'Server error occurred.'
-            ], 500);
+                'error' => 'Location search is temporarily unavailable.'
+            ], 502);
         }
     }
 
@@ -1361,121 +1560,275 @@ class WeatherController extends Controller
         string $city,
         string $prefix = 'location'
     ): ?array {
+        $normalizedInput = $this->normalizeGujaratLocationInput($city);
+
+        if ($normalizedInput === '') {
+            return null;
+        }
 
         $cacheKey =
-            $prefix .
-            '_location:' .
-            strtolower(
-                $city
-            );
+            'gujarat_location:' .
+            $this->locationSearchKey($normalizedInput);
 
         return Cache::remember(
             $cacheKey,
             now()->addDay(),
-            function () use ($city) {
-
+            function () use ($normalizedInput, $city) {
                 try {
+                    $candidateName =
+                        $this->canonicalGujaratLocationName($normalizedInput)
+                        ?? $normalizedInput;
 
-                    $response =
-                        Http::timeout(10)->get(
+                    $tryGeocode = function (string $searchName): ?array {
+                        $response = Http::timeout(8)->get(
                             'https://geocoding-api.open-meteo.com/v1/search',
                             [
-                                'name' =>
-                                    $city .
-                                    ', Gujarat',
-
-                                'count' =>
-                                    10,
-
-                                'language' =>
-                                    'en',
-
-                                'format' =>
-                                    'json',
-
-                                'countryCode' =>
-                                    'IN',
+                                'name' => $searchName . ', Gujarat',
+                                'count' => 10,
+                                'language' => 'en',
+                                'format' => 'json',
+                                'countryCode' => 'IN',
                             ]
                         );
 
-                    if (
-                        !$response->successful()
-                    ) {
+                        if (!$response->successful()) {
+                            Log::error(
+                                'Open-Meteo geocoding request failed',
+                                [
+                                    'status' => $response->status(),
+                                    'search_name' => $searchName,
+                                ]
+                            );
+
+                            throw new \RuntimeException('LOCATION_PROVIDER_ERROR');
+                        }
+
+                        foreach ($response->json('results', []) as $result) {
+                            $countryCode = strtoupper(
+                                (string) ($result['country_code'] ?? '')
+                            );
+
+                            $admin1 = strtolower(
+                                trim((string) ($result['admin1'] ?? ''))
+                            );
+
+                            $lat = $result['latitude'] ?? null;
+                            $lon = $result['longitude'] ?? null;
+
+                            if (
+                                $countryCode === 'IN' &&
+                                $admin1 === 'gujarat' &&
+                                is_numeric($lat) &&
+                                is_numeric($lon)
+                            ) {
+                                return [
+                                    'id' => $result['id'] ?? null,
+                                    'name' => $this->canonicalResolvedLocationName(
+                                        (string) ($result['name'] ?? $searchName)
+                                    ),
+                                    'latitude' => (float) $lat,
+                                    'longitude' => (float) $lon,
+                                    'timezone' => $result['timezone'] ?? 'Asia/Kolkata',
+                                    'state' => $result['admin1'] ?? 'Gujarat',
+                                    'country' => $result['country'] ?? 'India',
+                                    'country_code' => $countryCode,
+                                ];
+                            }
+                        }
+
                         return null;
+                    };
+
+                    $location = $tryGeocode($candidateName);
+
+                    if (
+                        !$location &&
+                        strcasecmp($candidateName, $normalizedInput) !== 0
+                    ) {
+                        $location = $tryGeocode($normalizedInput);
                     }
 
-                    $results =
-                        $response->json(
-                            'results',
-                            []
+                    if (!$location) {
+                        $fuzzyName = $this->findFuzzyGujaratLocationName(
+                            $normalizedInput
                         );
 
-                    foreach (
-                        $results as $result
-                    ) {
-
-                        $countryCode =
-                            strtoupper(
-                                (string) (
-                                    $result['country_code']
-                                    ?? ''
-                                )
-                            );
-
-                        $admin1 =
-                            strtolower(
-                                trim(
-                                    (string) (
-                                        $result['admin1']
-                                        ?? ''
-                                    )
-                                )
-                            );
-
                         if (
-                            $countryCode === 'IN' &&
-                            $admin1 === 'gujarat'
+                            $fuzzyName &&
+                            strcasecmp($fuzzyName, $candidateName) !== 0
                         ) {
-
-                            return [
-                                'name' =>
-                                    $result['name']
-                                    ?? $city,
-
-                                'latitude' =>
-                                    $result['latitude']
-                                    ?? null,
-
-                                'longitude' =>
-                                    $result['longitude']
-                                    ?? null,
-
-                                'timezone' =>
-                                    $result['timezone']
-                                    ?? 'Asia/Kolkata',
-                            ];
+                            $location = $tryGeocode($fuzzyName);
                         }
                     }
 
-                    return null;
+                    return $location;
 
                 } catch (\Throwable $e) {
-
                     Log::warning(
                         'Gujarat geocoding failed',
                         [
-                            'city' =>
-                                $city,
-
-                            'message' =>
-                                $e->getMessage(),
+                            'city' => $city,
+                            'message' => $e->getMessage(),
                         ]
                     );
+
+                    if ($e->getMessage() === 'LOCATION_PROVIDER_ERROR') {
+                        throw $e;
+                    }
 
                     return null;
                 }
             }
         );
+    }
+
+    private function normalizeGujaratLocationInput(string $value): string
+    {
+        $value = trim($value);
+
+        if ($value === '') {
+            return '';
+        }
+
+        $value = preg_replace('/[^\pL\pN,\s-]+/u', ' ', $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = trim($value, " \t\n\r\0\x0B,");
+
+        for ($i = 0; $i < 3; $i++) {
+            $cleaned = preg_replace(
+                '/(?:,|\s)+(?:gujarat|gujrat|india|in)\s*$/iu',
+                '',
+                $value
+            );
+
+            if (!is_string($cleaned) || $cleaned === $value) {
+                break;
+            }
+
+            $value = trim($cleaned);
+        }
+
+        return $value;
+    }
+
+    private function locationSearchKey(string $value): string
+    {
+        $value = strtolower($value);
+        $value = preg_replace('/[^a-z0-9]+/i', ' ', $value) ?? $value;
+        return trim(preg_replace('/\s+/', ' ', $value) ?? $value);
+    }
+
+    private function canonicalGujaratLocationName(string $value): ?string
+    {
+        $key = $this->locationSearchKey($value);
+
+        $aliases = [
+            'mahesana' => 'Mehsana',
+            'mehsana' => 'Mehsana',
+            'mehsna' => 'Mehsana',
+            'maheshana' => 'Mehsana',
+            'ahmedbad' => 'Ahmedabad',
+            'ahmadabad' => 'Ahmedabad',
+            'ahmedabad city' => 'Ahmedabad',
+            'baroda' => 'Vadodara',
+            'vadodora' => 'Vadodara',
+            'vadodra' => 'Vadodara',
+            'gandhinager' => 'Gandhinagar',
+            'gandhinagar' => 'Gandhinagar',
+            'bhavnagr' => 'Bhavnagar',
+            'jamnagr' => 'Jamnagar',
+            'rajkoot' => 'Rajkot',
+            'rajkote' => 'Rajkot',
+            'surath' => 'Surat',
+            'bharuchh' => 'Bharuch',
+            'palanpur city' => 'Palanpur',
+            'himatnagar city' => 'Himatnagar',
+            'himatnager' => 'Himatnagar',
+            'modasa city' => 'Modasa',
+            'dahad' => 'Dahod',
+            'dahhod' => 'Dahod',
+            'dahodh' => 'Dahod',
+            'banas kantha' => 'Banaskantha',
+            'banaskantha' => 'Banaskantha',
+            'chotta udepur' => 'Chhota Udepur',
+            'chhotaudepur' => 'Chhota Udepur',
+            'devbhoomi dwarka' => 'Devbhumi Dwarka',
+            'devbhumi dwarka' => 'Devbhumi Dwarka',
+            'gir somnath' => 'Gir Somnath',
+            'panch mahal' => 'Panchmahal',
+            'panchmahal' => 'Panchmahal',
+            'kachchh' => 'Kutch',
+            'kachh' => 'Kutch',
+            'kutch' => 'Kutch',
+            'buj' => 'Bhuj',
+            'bhuj' => 'Bhuj',
+        ];
+
+        return $aliases[$key] ?? null;
+    }
+
+    private function canonicalResolvedLocationName(string $value): string
+    {
+        $canonical = $this->canonicalGujaratLocationName($value);
+        return $canonical ?? trim($value);
+    }
+
+    private function findFuzzyGujaratLocationName(string $value): ?string
+    {
+        $key = $this->locationSearchKey($value);
+
+        if (strlen($key) < 4) {
+            return null;
+        }
+
+        $candidates = [
+            'Ahmedabad', 'Amreli', 'Anand', 'Aravalli', 'Banaskantha',
+            'Bharuch', 'Bhavnagar', 'Botad', 'Chhota Udepur', 'Dahod',
+            'Dang', 'Devbhumi Dwarka', 'Gandhinagar', 'Gir Somnath',
+            'Jamnagar', 'Junagadh', 'Kheda', 'Kutch', 'Mahisagar',
+            'Mehsana', 'Morbi', 'Narmada', 'Navsari', 'Panchmahal',
+            'Patan', 'Porbandar', 'Rajkot', 'Sabarkantha', 'Surat',
+            'Surendranagar', 'Tapi', 'Vadodara', 'Valsad', 'Bhuj',
+            'Dholka', 'Godhra', 'Himatnagar', 'Modasa', 'Nadiad',
+            'Palanpur', 'Vapi', 'Veraval', 'Gandhidham', 'Ankleshwar',
+            'Bardoli', 'Botad', 'Kalol', 'Sanand', 'Sidhpur', 'Unjha',
+            'Mundra', 'Mandvi', 'Dwarka', 'Somnath', 'Porbandar',
+        ];
+
+        $best = null;
+        $bestScore = 0.0;
+        $inputPhonetic = metaphone($key);
+
+        foreach ($candidates as $candidate) {
+            $candidateKey = $this->locationSearchKey($candidate);
+            $distance = levenshtein($key, $candidateKey);
+            $maxLength = max(strlen($key), strlen($candidateKey));
+            $similarity = 0.0;
+
+            similar_text($key, $candidateKey, $similarity);
+
+            $phoneticMatch =
+                $inputPhonetic !== '' &&
+                $inputPhonetic === metaphone($candidateKey);
+
+            $distanceScore =
+                $maxLength > 0
+                    ? 1 - ($distance / $maxLength)
+                    : 0;
+
+            $score = max(
+                $distanceScore,
+                $similarity / 100,
+                $phoneticMatch ? 0.92 : 0
+            );
+
+            if ($score > $bestScore) {
+                $bestScore = $score;
+                $best = $candidate;
+            }
+        }
+
+        return $bestScore >= 0.78 ? $best : null;
     }
 
 
@@ -2199,43 +2552,7 @@ class WeatherController extends Controller
      */
     private function detectGujaratLocationFromPrompt(string $prompt): ?string
     {
-        $locations = [
-            'Devbhumi Dwarka',
-            'Gir Somnath',
-            'Chhota Udepur',
-            'Bhavnagar',
-            'Gandhinagar',
-            'Ahmedabad',
-            'Amreli',
-            'Anand',
-            'Aravalli',
-            'Banaskantha',
-            'Bharuch',
-            'Botad',
-            'Dahod',
-            'Dang',
-            'Jamnagar',
-            'Junagadh',
-            'Kheda',
-            'Kutch',
-            'Mahisagar',
-            'Mahesana',
-            'Mehsana',
-            'Morbi',
-            'Narmada',
-            'Navsari',
-            'Panchmahal',
-            'Patan',
-            'Porbandar',
-            'Rajkot',
-            'Sabarkantha',
-            'Surat',
-            'Surendranagar',
-            'Tapi',
-            'Vadodara',
-            'Valsad',
-            'Bhuj',
-        ];
+        $locations = $this->getGujaratLocationCandidates();
 
         usort(
             $locations,
@@ -2243,28 +2560,31 @@ class WeatherController extends Controller
         );
 
         foreach ($locations as $location) {
-            if (preg_match('/(?<![A-Za-z])' . preg_quote($location, '/') . '(?![A-Za-z])/iu', $prompt)) {
-                return strcasecmp($location, 'Mehsana') === 0
-                    ? 'Mahesana'
-                    : $location;
+            if (
+                preg_match(
+                    '/(?<![A-Za-z])' .
+                    preg_quote($location, '/') .
+                    '(?![A-Za-z])/iu',
+                    $prompt
+                )
+            ) {
+                $resolved = $this->resolveGujaratLocation(
+                    $location,
+                    'meteorologist'
+                );
+
+                if ($resolved && isset($resolved['name'])) {
+                    return $resolved['name'];
+                }
             }
         }
 
-        /*
-         * Fallback for simple prompts such as:
-         * "weather in Dholka"
-         * "forecast for Palanpur"
-         * "temperature at Modasa"
-         *
-         * The candidate is then validated through Gujarat geocoding.
-         */
         if (preg_match(
             '/(?:\bin\b|\bfor\b|\bat\b|\babout\b)\s+([A-Za-z][A-Za-z\s-]{1,45}?)(?=\s+(?:weather|forecast|today|tomorrow|now|temperature|rain|rainfall|wind|humidity|outside|travel)\b|[?.!,]|$)/iu',
             $prompt,
             $matches
         )) {
             $candidate = trim($matches[1]);
-            $candidate = preg_replace('/\s+$/', '', $candidate);
 
             if ($candidate !== '') {
                 $location = $this->resolveGujaratLocation(
@@ -2281,6 +2601,22 @@ class WeatherController extends Controller
         return null;
     }
 
+    private function getGujaratLocationCandidates(): array
+    {
+        return [
+            'Devbhumi Dwarka', 'Gir Somnath', 'Chhota Udepur',
+            'Bhavnagar', 'Gandhinagar', 'Ahmedabad', 'Amreli', 'Anand',
+            'Aravalli', 'Banaskantha', 'Bharuch', 'Botad', 'Dahod', 'Dang',
+            'Jamnagar', 'Junagadh', 'Kheda', 'Kutch', 'Mahisagar', 'Mahesana',
+            'Mehsana', 'Morbi', 'Narmada', 'Navsari', 'Panchmahal', 'Patan',
+            'Porbandar', 'Rajkot', 'Sabarkantha', 'Surat', 'Surendranagar',
+            'Tapi', 'Vadodara', 'Valsad', 'Bhuj', 'Dholka', 'Godhra',
+            'Himatnagar', 'Modasa', 'Nadiad', 'Palanpur', 'Vapi', 'Veraval',
+            'Gandhidham', 'Ankleshwar', 'Bardoli', 'Kalol', 'Sanand', 'Sidhpur',
+            'Unjha', 'Mundra', 'Mandvi', 'Dwarka', 'Somnath'
+        ];
+    }
+
 
     /**
      * Fetch fresh OpenWeather data for the location mentioned by the user.
@@ -2295,26 +2631,45 @@ class WeatherController extends Controller
         }
 
         try {
+            $location = $this->resolveGujaratLocation(
+                $city,
+                'meteorologist'
+            );
+
+            if (
+                !$location ||
+                !is_numeric($location['latitude'] ?? null) ||
+                !is_numeric($location['longitude'] ?? null)
+            ) {
+                return null;
+            }
+
+            $lat = (float) $location['latitude'];
+            $lon = (float) $location['longitude'];
+
             $currentResponse = Http::timeout(10)->get(
                 'https://api.openweathermap.org/data/2.5/weather',
                 [
-                    'q' => $city . ', Gujarat, IN',
+                    'lat' => $lat,
+                    'lon' => $lon,
                     'units' => 'metric',
                     'appid' => $apiKey,
                 ]
             );
 
             if (!$currentResponse->successful()) {
+                Log::warning(
+                    'AI current weather provider request failed',
+                    [
+                        'status' => $currentResponse->status(),
+                        'city' => $city,
+                    ]
+                );
                 return null;
             }
 
             $current = $currentResponse->json();
-            $lat = data_get($current, 'coord.lat');
-            $lon = data_get($current, 'coord.lon');
-
-            if (!is_numeric($lat) || !is_numeric($lon)) {
-                return null;
-            }
+            $current['name'] = $location['name'] ?? ($current['name'] ?? $city);
 
             $forecastResponse = Http::timeout(10)->get(
                 'https://api.openweathermap.org/data/2.5/forecast',
@@ -2331,7 +2686,7 @@ class WeatherController extends Controller
                 'forecast' => $forecastResponse->successful()
                     ? $forecastResponse->json()
                     : null,
-                'uv' => $this->getUvIndex((float) $lat, (float) $lon),
+                'uv' => $this->getUvIndex($lat, $lon),
             ];
         } catch (\Throwable $e) {
             Log::warning(
